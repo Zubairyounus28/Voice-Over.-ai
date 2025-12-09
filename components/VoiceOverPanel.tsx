@@ -1,16 +1,21 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2 } from 'lucide-react';
-import { AVAILABLE_VOICES, VoiceOption, VoiceGender, SpeakingStyle } from '../types';
-import { generateSpeech } from '../services/geminiService';
+import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles } from 'lucide-react';
+import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, VoiceOption, PodcastPair, VoiceGender, SpeakingStyle } from '../types';
+import { generateSpeech, translateToUrdu, generatePodcastScript } from '../services/geminiService';
 import { decodeBase64, decodeAudioData, audioBufferToWav } from '../utils/audioUtils';
 
 export const VoiceOverPanel: React.FC = () => {
   const [text, setText] = useState<string>('');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>(AVAILABLE_VOICES[1].id);
+  const [selectedPairId, setSelectedPairId] = useState<string>(AVAILABLE_PODCAST_PAIRS[0].id);
   const [pitch, setPitch] = useState<number>(0); // detune in cents
   const [speakingStyle, setSpeakingStyle] = useState<SpeakingStyle>(SpeakingStyle.STANDARD);
+  const [podcastLang, setPodcastLang] = useState<'ENGLISH' | 'URDU'>('ENGLISH');
+  
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isProcessingScript, setIsProcessingScript] = useState<boolean>(false);
+  const [isTranslating, setIsTranslating] = useState<boolean>(false);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   
@@ -34,10 +39,12 @@ export const VoiceOverPanel: React.FC = () => {
   const handleGenerate = async () => {
     if (!text.trim()) return;
     setIsLoading(true);
-    stopAudio(); // Stop any current playback
+    stopAudio(); 
 
     try {
-      const base64Audio = await generateSpeech(text, selectedVoiceId, speakingStyle);
+      // If Podcast mode, use selectedPairId, else use selectedVoiceId
+      const idToUse = speakingStyle === SpeakingStyle.PODCAST ? selectedPairId : selectedVoiceId;
+      const base64Audio = await generateSpeech(text, idToUse, speakingStyle);
       const rawBytes = decodeBase64(base64Audio);
       
       if (audioContextRef.current) {
@@ -51,6 +58,39 @@ export const VoiceOverPanel: React.FC = () => {
     }
   };
 
+  const handleTranslate = async () => {
+    if (!text.trim()) return;
+    setIsTranslating(true);
+    try {
+      const translatedText = await translateToUrdu(text);
+      setText(translatedText);
+      // Automatically switch to Urdu voice if regular mode
+      if (speakingStyle !== SpeakingStyle.PODCAST) {
+        const urduVoice = AVAILABLE_VOICES.find(v => v.isUrdu);
+        if (urduVoice && selectedVoiceId !== urduVoice.id) {
+          handleVoiceSelect(urduVoice);
+        }
+      }
+    } catch (error) {
+      alert("Translation failed.");
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleGenerateScript = async () => {
+      if (!text.trim()) return;
+      setIsProcessingScript(true);
+      try {
+          const script = await generatePodcastScript(text, selectedPairId, podcastLang);
+          setText(script);
+      } catch (error) {
+          alert("Failed to create script.");
+      } finally {
+          setIsProcessingScript(false);
+      }
+  };
+
   const handleVoiceSelect = (voice: VoiceOption) => {
     setSelectedVoiceId(voice.id);
     setPitch(voice.recommendedPitch);
@@ -59,7 +99,6 @@ export const VoiceOverPanel: React.FC = () => {
   const playAudio = () => {
     if (!audioBuffer || !audioContextRef.current || !gainNodeRef.current) return;
 
-    // Close previous source if running
     if (sourceNodeRef.current) {
       try {
         sourceNodeRef.current.stop();
@@ -69,8 +108,10 @@ export const VoiceOverPanel: React.FC = () => {
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBuffer;
     
-    // Apply pitch (detune)
-    source.detune.value = pitch; 
+    // Disable pitch shifting for Podcast mode as it's multi-speaker mixed
+    if (speakingStyle !== SpeakingStyle.PODCAST) {
+        source.detune.value = pitch; 
+    }
 
     source.connect(gainNodeRef.current);
     source.onended = () => setIsPlaying(false);
@@ -101,8 +142,8 @@ export const VoiceOverPanel: React.FC = () => {
   const handleDownload = () => {
     if (!audioBuffer) return;
     
-    // To download with the PITCH shift applied, we render offline.
-    if (pitch === 0) {
+    // For Podcast or zero pitch, direct download. For modified pitch, render offline.
+    if (pitch === 0 || speakingStyle === SpeakingStyle.PODCAST) {
       const wavBlob = audioBufferToWav(audioBuffer);
       downloadBlob(wavBlob, 'voice-over.wav');
     } else {
@@ -123,8 +164,6 @@ export const VoiceOverPanel: React.FC = () => {
   };
 
   const renderOfflineWithPitch = async (buffer: AudioBuffer, detuneVal: number): Promise<AudioBuffer> => {
-    // Estimate new duration (detune affects playback rate)
-    // Rate = 2 ^ (cents / 1200)
     const rate = Math.pow(2, detuneVal / 1200);
     const newDuration = buffer.duration / rate;
     
@@ -150,6 +189,9 @@ export const VoiceOverPanel: React.FC = () => {
     [VoiceGender.CHILD]: AVAILABLE_VOICES.filter(v => v.gender === VoiceGender.CHILD),
   };
 
+  const currentVoice = AVAILABLE_VOICES.find(v => v.id === selectedVoiceId);
+  const currentPair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === selectedPairId);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-140px)] min-h-[600px]">
       
@@ -166,14 +208,18 @@ export const VoiceOverPanel: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-4 space-y-8 custom-scrollbar">
             
             {/* Style Selection */}
-            <section>
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Speaking Style</h3>
+            <section className={currentVoice?.isUrdu && speakingStyle !== SpeakingStyle.PODCAST ? 'opacity-50 pointer-events-none grayscale' : ''}>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 flex justify-between">
+                <span>Speaking Style</span>
+                {currentVoice?.isUrdu && speakingStyle !== SpeakingStyle.PODCAST && <span className="text-[10px] text-amber-500">Auto-set for Urdu</span>}
+              </h3>
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { id: SpeakingStyle.STANDARD, label: 'Standard', icon: MessageSquare },
                   { id: SpeakingStyle.FICTION, label: 'Fiction', icon: BookOpen },
                   { id: SpeakingStyle.NON_FICTION, label: 'Docu', icon: Newspaper },
                   { id: SpeakingStyle.SINGING, label: 'Singing', icon: Music },
+                  { id: SpeakingStyle.PODCAST, label: 'Podcast', icon: Users },
                 ].map((style) => (
                   <button
                     key={style.id}
@@ -191,76 +237,127 @@ export const VoiceOverPanel: React.FC = () => {
               </div>
             </section>
 
-            {/* Voice Selection */}
-            <section>
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Voice Persona</h3>
-              <div className="space-y-4">
-                {(['MALE', 'FEMALE', 'CHILD'] as VoiceGender[]).map((category) => {
-                  const voices = groupedVoices[category];
-                  if (!voices.length) return null;
-                  
-                  let label = '';
-                  let icon = null;
-                  if (category === VoiceGender.CHILD) { label = 'Kids'; icon = <Smile size={14} className="text-yellow-400" />; }
-                  if (category === VoiceGender.FEMALE) { label = 'Women'; icon = <User size={14} className="text-pink-400" />; }
-                  if (category === VoiceGender.MALE) { label = 'Men'; icon = <User size={14} className="text-blue-400" />; }
+            {speakingStyle === SpeakingStyle.PODCAST ? (
+              /* PODCAST SETTINGS */
+              <section className="animate-fade-in">
+                <div className="flex items-center justify-between mb-3">
+                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Podcast Duo</h3>
+                   <div className="flex items-center bg-slate-700 rounded-lg p-0.5">
+                      <button 
+                        onClick={() => setPodcastLang('ENGLISH')}
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'ENGLISH' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        ENG
+                      </button>
+                      <button 
+                        onClick={() => setPodcastLang('URDU')}
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'URDU' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        URDU
+                      </button>
+                   </div>
+                </div>
+                
+                <div className="space-y-2">
+                   {AVAILABLE_PODCAST_PAIRS.map(pair => (
+                     <button
+                        key={pair.id}
+                        onClick={() => setSelectedPairId(pair.id)}
+                        className={`w-full flex items-center p-3 rounded-xl border transition-all text-left group ${
+                          selectedPairId === pair.id
+                            ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300'
+                            : 'bg-slate-900 border-slate-700 hover:bg-slate-800 text-slate-300'
+                        }`}
+                     >
+                       <div className="flex-1">
+                          <div className="text-sm font-bold">{pair.name}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">{pair.description}</div>
+                          <div className="flex gap-2 mt-2">
+                             <span className="text-[10px] bg-slate-800 border border-slate-600 px-1.5 py-0.5 rounded text-slate-400">{pair.speaker1.label}</span>
+                             <span className="text-[10px] bg-slate-800 border border-slate-600 px-1.5 py-0.5 rounded text-slate-400">{pair.speaker2.label}</span>
+                          </div>
+                       </div>
+                     </button>
+                   ))}
+                </div>
+              </section>
+            ) : (
+              /* SINGLE VOICE SETTINGS */
+              <>
+                <section>
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Voice Persona</h3>
+                  <div className="space-y-4">
+                    {(['MALE', 'FEMALE', 'CHILD'] as VoiceGender[]).map((category) => {
+                      const voices = groupedVoices[category];
+                      if (!voices.length) return null;
+                      
+                      let label = '';
+                      let icon = null;
+                      if (category === VoiceGender.CHILD) { label = 'Kids'; icon = <Smile size={14} className="text-yellow-400" />; }
+                      if (category === VoiceGender.FEMALE) { label = 'Women'; icon = <User size={14} className="text-pink-400" />; }
+                      if (category === VoiceGender.MALE) { label = 'Men'; icon = <User size={14} className="text-blue-400" />; }
 
-                  return (
-                    <div key={category}>
-                      <div className="flex items-center gap-2 mb-2 px-1">
-                        {icon}
-                        <span className="text-xs font-medium text-slate-400">{label}</span>
-                      </div>
-                      <div className="space-y-1">
-                        {voices.map((voice) => (
-                          <button
-                            key={voice.id}
-                            onClick={() => handleVoiceSelect(voice)}
-                            className={`w-full flex items-center p-2 rounded-lg border transition-all text-left group ${
-                              selectedVoiceId === voice.id
-                                ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-300'
-                                : 'bg-transparent border-transparent hover:bg-slate-700/50 text-slate-300'
-                            }`}
-                          >
-                            <div className={`w-2 h-2 rounded-full mr-3 shrink-0 ${
-                              selectedVoiceId === voice.id ? 'bg-indigo-400' : 'bg-slate-600'
-                            }`} />
-                            <div className="flex-1">
-                              <div className="text-sm font-medium">{voice.name}</div>
-                              <div className="text-[10px] text-slate-500">{voice.description}</div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+                      return (
+                        <div key={category}>
+                          <div className="flex items-center gap-2 mb-2 px-1">
+                            {icon}
+                            <span className="text-xs font-medium text-slate-400">{label}</span>
+                          </div>
+                          <div className="space-y-1">
+                            {voices.map((voice) => (
+                              <button
+                                key={voice.id}
+                                onClick={() => handleVoiceSelect(voice)}
+                                className={`w-full flex items-center p-2 rounded-lg border transition-all text-left group ${
+                                  selectedVoiceId === voice.id
+                                    ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-300'
+                                    : 'bg-transparent border-transparent hover:bg-slate-700/50 text-slate-300'
+                                }`}
+                              >
+                                <div className={`w-2 h-2 rounded-full mr-3 shrink-0 ${
+                                  selectedVoiceId === voice.id ? 'bg-indigo-400' : 'bg-slate-600'
+                                }`} />
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium flex items-center gap-2">
+                                    {voice.name}
+                                    {voice.isUrdu && <span className="text-[9px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded uppercase tracking-wider">Urdu</span>}
+                                  </div>
+                                  <div className="text-[10px] text-slate-500">{voice.description}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
 
-            {/* Pitch Control */}
-            <section>
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Pitch Shift</h3>
-                <span className={`text-xs font-mono px-2 py-0.5 rounded ${pitch !== 0 ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-700 text-slate-400'}`}>
-                  {pitch > 0 ? '+' : ''}{pitch}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="-1200"
-                max="1200"
-                step="50"
-                value={pitch}
-                onChange={(e) => setPitch(Number(e.target.value))}
-                className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-              />
-              <div className="flex justify-between text-[10px] text-slate-600 mt-1 font-medium">
-                <span>Deep</span>
-                <span>Natural</span>
-                <span>High</span>
-              </div>
-            </section>
+                {/* Pitch Control */}
+                <section>
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Pitch Shift</h3>
+                    <span className={`text-xs font-mono px-2 py-0.5 rounded ${pitch !== 0 ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-700 text-slate-400'}`}>
+                      {pitch > 0 ? '+' : ''}{pitch}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-1200"
+                    max="1200"
+                    step="50"
+                    value={pitch}
+                    onChange={(e) => setPitch(Number(e.target.value))}
+                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-600 mt-1 font-medium">
+                    <span>Deep</span>
+                    <span>Natural</span>
+                    <span>High</span>
+                  </div>
+                </section>
+              </>
+            )}
 
           </div>
         </div>
@@ -271,17 +368,55 @@ export const VoiceOverPanel: React.FC = () => {
         
         {/* Editor */}
         <div className="flex-1 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl flex flex-col relative overflow-hidden">
-          <label className="block text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex justify-between">
-             <span>Script Editor</span>
-             <span className="text-xs font-normal text-slate-500">{text.length} characters</span>
-          </label>
+          <div className="flex justify-between items-center mb-4">
+            <label className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+               <span>Script Editor</span>
+               <span className="text-xs font-normal text-slate-500 border-l border-slate-600 pl-2 ml-2">{text.length} chars</span>
+            </label>
+            
+            <div className="flex gap-2">
+              {speakingStyle === SpeakingStyle.PODCAST && (
+                  <button 
+                  onClick={handleGenerateScript}
+                  disabled={isProcessingScript || !text}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors border border-indigo-500 shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+                >
+                  {isProcessingScript ? (
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                  Auto-Script
+                </button>
+              )}
+              
+              <button 
+                onClick={handleTranslate}
+                disabled={isTranslating || !text || speakingStyle === SpeakingStyle.PODCAST}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                    speakingStyle === SpeakingStyle.PODCAST 
+                    ? 'opacity-0 pointer-events-none' 
+                    : 'bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600'
+                }`}
+              >
+                {isTranslating ? (
+                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  <Globe size={14} />
+                )}
+                Translate to Urdu
+              </button>
+            </div>
+          </div>
           
           <textarea
-            className="flex-1 w-full bg-slate-900/50 border border-slate-700 rounded-xl p-6 text-lg text-slate-100 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none resize-none transition-all placeholder-slate-600 leading-relaxed"
+            className={`flex-1 w-full bg-slate-900/50 border border-slate-700 rounded-xl p-6 text-lg text-slate-100 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none resize-none transition-all placeholder-slate-600 leading-relaxed ${
+              currentVoice?.isUrdu || podcastLang === 'URDU' ? 'text-right font-[Inter]' : ''
+            }`}
+            style={{ direction: currentVoice?.isUrdu || (speakingStyle === SpeakingStyle.PODCAST && podcastLang === 'URDU') ? 'rtl' : 'ltr' }}
             placeholder={
+              speakingStyle === SpeakingStyle.PODCAST ? `Enter a topic or a script...\n\nExample Format:\n${currentPair?.speaker1.name}: Hello there!\n${currentPair?.speaker2.name}: Hi! How are you?\n\n(Or just click 'Auto-Script' to convert raw text)` :
               speakingStyle === SpeakingStyle.FICTION ? "Once upon a time, in a land far away..." :
-              speakingStyle === SpeakingStyle.NON_FICTION ? "The distinct characteristics of the species..." :
-              speakingStyle === SpeakingStyle.SINGING ? "Happy birthday to you..." :
               "Enter your text here..."
             }
             value={text}
@@ -324,10 +459,14 @@ export const VoiceOverPanel: React.FC = () => {
             
             <div className="flex-1 overflow-hidden">
                 <div className="flex items-baseline justify-between mb-1">
-                  <h3 className="font-semibold text-slate-200 truncate">
-                    {speakingStyle === SpeakingStyle.FICTION ? 'Story Audio' : 
-                     speakingStyle === SpeakingStyle.NON_FICTION ? 'Documentary Audio' : 
-                     speakingStyle === SpeakingStyle.SINGING ? 'Song Audio' : 'Speech Audio'}
+                  <h3 className="font-semibold text-slate-200 truncate flex items-center gap-2">
+                    {speakingStyle === SpeakingStyle.PODCAST ? (
+                        <><Users size={14} className="text-purple-400" /> Podcast: {currentPair?.name}</>
+                    ) : (
+                        <>{speakingStyle === SpeakingStyle.FICTION ? 'Story' : speakingStyle === SpeakingStyle.SINGING ? 'Song' : 'Speech'} Audio</>
+                    )}
+                     
+                     {(currentVoice?.isUrdu || (speakingStyle === SpeakingStyle.PODCAST && podcastLang === 'URDU')) && <span className="text-[10px] bg-green-900 text-green-300 px-1.5 rounded border border-green-800">Urdu</span>}
                   </h3>
                   <span className="text-xs text-indigo-400 font-mono">
                     {audioBuffer ? `${audioBuffer.duration.toFixed(1)}s` : '--:--'}
