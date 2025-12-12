@@ -111,7 +111,10 @@ export const generateSpeech = async (text: string, voiceOrPairId: string, style:
       if (selectedVoice.isUrdu) {
         if (selectedVoice.id === 'urdu_authority_male') {
              // Specific prompt for the Commercial/Authority voice
-             finalPrompt = `Narrate the following text in Urdu with a bold, professional, and authoritative commercial tone (Pakistani accent): ${text}`;
+             finalPrompt = `Narrate the following text in Urdu with a bold, authoritative, and professional commercial tone (Pakistani accent). The delivery should be strong, impactful, and suitable for a high-energy advertisement. Text: ${text}`;
+        } else if (selectedVoice.id === 'urdu_pro_emotional') {
+             // New Emotional Professional Voice
+             finalPrompt = `Narrate the following text in Urdu (Pakistani accent) with deep natural emotion and professionalism. The tone should be warm, trustworthy, and sophisticated, like a high-quality brand ambassador or Dr. Saifuddin style. Use expressive intonation and natural pacing. Text: ${text}`;
         } else {
              finalPrompt = `Narrate the following text in Urdu with a natural Pakistani accent: ${text}`;
         }
