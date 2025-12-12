@@ -39,11 +39,14 @@ export interface PodcastPair {
 export const AVAILABLE_VOICES: VoiceOption[] = [
   // Men
   { id: 'v1', name: 'Deep Narrator', gender: VoiceGender.MALE, description: 'Authoritative, deep', geminiVoiceName: 'Fenrir', recommendedPitch: -200 },
+  { id: 'principal_male', name: 'Principal (Male)', gender: VoiceGender.MALE, description: 'Authoritative, age 60', geminiVoiceName: 'Fenrir', recommendedPitch: -150 },
+  { id: 'urdu_authority_male', name: 'Urdu Authority (Male)', gender: VoiceGender.MALE, description: 'Bold, Professional, Ad Style', geminiVoiceName: 'Fenrir', recommendedPitch: -100, isUrdu: true },
   { id: 'v2', name: 'Standard Man', gender: VoiceGender.MALE, description: 'Conversational, clear', geminiVoiceName: 'Puck', recommendedPitch: 0 },
   { id: 'v5', name: 'Energetic Man', gender: VoiceGender.MALE, description: 'Dynamic, lively', geminiVoiceName: 'Puck', recommendedPitch: 100 },
   { id: 'urdu_1', name: 'Urdu Narrator', gender: VoiceGender.MALE, description: 'Pakistani Accent', geminiVoiceName: 'Puck', recommendedPitch: -50, isUrdu: true },
   
   // Women
+  { id: 'principal_female', name: 'Principal (Female)', gender: VoiceGender.FEMALE, description: 'Strict, experienced', geminiVoiceName: 'Kore', recommendedPitch: -120 },
   { id: 'v3', name: 'Soft Woman', gender: VoiceGender.FEMALE, description: 'Calm, soothing', geminiVoiceName: 'Kore', recommendedPitch: 0 },
   { id: 'v4', name: 'Energetic Woman', gender: VoiceGender.FEMALE, description: 'Bright, fast', geminiVoiceName: 'Zephyr', recommendedPitch: 0 },
   

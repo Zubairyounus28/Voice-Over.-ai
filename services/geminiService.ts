@@ -109,7 +109,12 @@ export const generateSpeech = async (text: string, voiceOrPairId: string, style:
       };
 
       if (selectedVoice.isUrdu) {
-        finalPrompt = `Narrate the following text in Urdu with a natural Pakistani accent: ${text}`;
+        if (selectedVoice.id === 'urdu_authority_male') {
+             // Specific prompt for the Commercial/Authority voice
+             finalPrompt = `Narrate the following text in Urdu with a bold, professional, and authoritative commercial tone (Pakistani accent): ${text}`;
+        } else {
+             finalPrompt = `Narrate the following text in Urdu with a natural Pakistani accent: ${text}`;
+        }
       } else {
         switch (style) {
           case SpeakingStyle.FICTION:
