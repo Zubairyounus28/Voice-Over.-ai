@@ -26,6 +26,8 @@ export interface VoiceOption {
   geminiVoiceName: string;
   recommendedPitch: number;
   isUrdu?: boolean;
+  isCloned?: boolean;
+  stylePrompt?: string;
 }
 
 export interface PodcastPair {

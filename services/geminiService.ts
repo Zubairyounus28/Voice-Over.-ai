@@ -1,6 +1,6 @@
 
-import { GoogleGenAI, Modality } from "@google/genai";
-import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, SpeakingStyle } from "../types";
+import { GoogleGenAI, Modality, Type } from "@google/genai";
+import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, SpeakingStyle, VoiceGender } from "../types";
 
 // Ensure API key exists
 const API_KEY = process.env.API_KEY;
@@ -27,6 +27,71 @@ export const translateToUrdu = async (text: string): Promise<string> => {
   } catch (error) {
     console.error("Translation error:", error);
     throw error;
+  }
+};
+
+/**
+ * Analyzes an audio sample to create a "Cloned" voice profile (Style Matching).
+ */
+export const analyzeVoiceSample = async (base64Audio: string, mimeType: string): Promise<{
+  name: string;
+  description: string;
+  stylePrompt: string;
+  baseVoice: string;
+  pitch: number;
+  gender: VoiceGender;
+}> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: {
+        parts: [
+          { inlineData: { mimeType, data: base64Audio } },
+          { text: `Analyze this voice sample for a text-to-speech cloning application.
+            
+            1. Identify the Gender (MALE, FEMALE, CHILD).
+            2. Describe the voice's style (e.g., Raspy, Energetic, Soft, Authoritative, Deep, Breathly) and any accent.
+            3. Write a specific "Acting Prompt" to instruct an AI narrator to mimic this exact style.
+            4. Select the best Base Voice ID to start with from:
+               - 'Fenrir' (Deep/Authoritative Male)
+               - 'Puck' (Standard/Energetic Male)
+               - 'Kore' (Mature/Soft Female)
+               - 'Zephyr' (Young/Lively Female)
+            5. Recommend a pitch shift (in cents, between -200 and +200) to match the speaker's pitch.
+            
+            Return JSON only.`
+          }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            gender: { type: Type.STRING, enum: ["MALE", "FEMALE", "CHILD"] },
+            styleDescription: { type: Type.STRING },
+            actingPrompt: { type: Type.STRING },
+            baseVoice: { type: Type.STRING, enum: ["Fenrir", "Puck", "Kore", "Zephyr"] },
+            pitch: { type: Type.NUMBER },
+          }
+        }
+      }
+    });
+
+    const result = JSON.parse(response.text || "{}");
+    
+    return {
+      name: `Cloned ${result.styleDescription?.split(' ')[0] || 'Voice'}`,
+      description: result.styleDescription || "Custom cloned voice",
+      stylePrompt: result.actingPrompt || "Speak naturally.",
+      baseVoice: result.baseVoice || "Puck",
+      pitch: result.pitch || 0,
+      gender: result.gender as VoiceGender || VoiceGender.MALE
+    };
+
+  } catch (error) {
+    console.error("Voice analysis error:", error);
+    throw new Error("Failed to analyze voice sample");
   }
 };
 
@@ -69,7 +134,12 @@ export const generatePodcastScript = async (text: string, pairId: string, langua
 /**
  * Generates speech from text using the specified voice/pair and style.
  */
-export const generateSpeech = async (text: string, voiceOrPairId: string, style: SpeakingStyle = SpeakingStyle.STANDARD) => {
+export const generateSpeech = async (
+    text: string, 
+    voiceOrPairId: string, 
+    style: SpeakingStyle = SpeakingStyle.STANDARD,
+    customVoiceData?: any 
+) => {
   const model = "gemini-2.5-flash-preview-tts";
   let config: any = {
     responseModalities: [Modality.AUDIO],
@@ -100,7 +170,15 @@ export const generateSpeech = async (text: string, voiceOrPairId: string, style:
 
   } else {
       // Standard Single Speaker
-      const selectedVoice = AVAILABLE_VOICES.find(v => v.id === voiceOrPairId) || AVAILABLE_VOICES[1];
+      let selectedVoice = AVAILABLE_VOICES.find(v => v.id === voiceOrPairId);
+      
+      // If not found in presets, check if it's the custom voice passed in
+      if (!selectedVoice && customVoiceData && customVoiceData.id === voiceOrPairId) {
+          selectedVoice = customVoiceData;
+      }
+      
+      // Fallback
+      if (!selectedVoice) selectedVoice = AVAILABLE_VOICES[1];
       
       config.speechConfig = {
           voiceConfig: {
@@ -108,12 +186,13 @@ export const generateSpeech = async (text: string, voiceOrPairId: string, style:
           },
       };
 
-      if (selectedVoice.isUrdu) {
+      if (selectedVoice.isCloned && selectedVoice.stylePrompt) {
+        // Use the cloned style prompt
+        finalPrompt = `Act as a professional voice actor. ${selectedVoice.stylePrompt} Narrate the following text: "${text}"`;
+      } else if (selectedVoice.isUrdu) {
         if (selectedVoice.id === 'urdu_authority_male') {
-             // Specific prompt for the Commercial/Authority voice
              finalPrompt = `Narrate the following text in Urdu with a bold, authoritative, and professional commercial tone (Pakistani accent). The delivery should be strong, impactful, and suitable for a high-energy advertisement. Text: ${text}`;
         } else if (selectedVoice.id === 'urdu_pro_emotional') {
-             // New Emotional Professional Voice
              finalPrompt = `Narrate the following text in Urdu (Pakistani accent) with deep natural emotion and professionalism. The tone should be warm, trustworthy, and sophisticated, like a high-quality brand ambassador or Dr. Saifuddin style. Use expressive intonation and natural pacing. Text: ${text}`;
         } else {
              finalPrompt = `Narrate the following text in Urdu with a natural Pakistani accent: ${text}`;

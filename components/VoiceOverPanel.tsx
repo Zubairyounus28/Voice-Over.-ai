@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles } from 'lucide-react';
+import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint } from 'lucide-react';
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, VoiceOption, PodcastPair, VoiceGender, SpeakingStyle } from '../types';
-import { generateSpeech, translateToUrdu, generatePodcastScript } from '../services/geminiService';
-import { decodeBase64, decodeAudioData, audioBufferToWav } from '../utils/audioUtils';
+import { generateSpeech, translateToUrdu, generatePodcastScript, analyzeVoiceSample } from '../services/geminiService';
+import { decodeBase64, decodeAudioData, audioBufferToWav, fileToBase64 } from '../utils/audioUtils';
 
 export const VoiceOverPanel: React.FC = () => {
   const [text, setText] = useState<string>('');
@@ -12,6 +12,10 @@ export const VoiceOverPanel: React.FC = () => {
   const [pitch, setPitch] = useState<number>(0); // detune in cents
   const [speakingStyle, setSpeakingStyle] = useState<SpeakingStyle>(SpeakingStyle.STANDARD);
   const [podcastLang, setPodcastLang] = useState<'ENGLISH' | 'URDU'>('ENGLISH');
+  
+  // Custom Voice State
+  const [clonedVoices, setClonedVoices] = useState<VoiceOption[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isProcessingScript, setIsProcessingScript] = useState<boolean>(false);
@@ -23,6 +27,7 @@ export const VoiceOverPanel: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Initialize AudioContext
@@ -44,7 +49,11 @@ export const VoiceOverPanel: React.FC = () => {
     try {
       // If Podcast mode, use selectedPairId, else use selectedVoiceId
       const idToUse = speakingStyle === SpeakingStyle.PODCAST ? selectedPairId : selectedVoiceId;
-      const base64Audio = await generateSpeech(text, idToUse, speakingStyle);
+      
+      // Pass custom voice data if using a cloned voice
+      const customVoice = clonedVoices.find(v => v.id === selectedVoiceId);
+      
+      const base64Audio = await generateSpeech(text, idToUse, speakingStyle, customVoice);
       const rawBytes = decodeBase64(base64Audio);
       
       if (audioContextRef.current) {
@@ -89,6 +98,41 @@ export const VoiceOverPanel: React.FC = () => {
       } finally {
           setIsProcessingScript(false);
       }
+  };
+
+  const handleVoiceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 10 * 1024 * 1024) {
+        alert("File too large. Please upload an audio sample under 10MB.");
+        return;
+      }
+
+      setIsAnalyzing(true);
+      try {
+        const base64 = await fileToBase64(file);
+        const analysis = await analyzeVoiceSample(base64, file.type);
+        
+        const newVoice: VoiceOption = {
+          id: `custom_${Date.now()}`,
+          name: analysis.name,
+          gender: analysis.gender,
+          description: analysis.description,
+          geminiVoiceName: analysis.baseVoice,
+          recommendedPitch: analysis.pitch,
+          isCloned: true,
+          stylePrompt: analysis.stylePrompt
+        };
+
+        setClonedVoices(prev => [...prev, newVoice]);
+        handleVoiceSelect(newVoice);
+      } catch (error) {
+        alert("Failed to analyze voice sample. Please try a clearer recording.");
+      } finally {
+        setIsAnalyzing(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    }
   };
 
   const handleVoiceSelect = (voice: VoiceOption) => {
@@ -183,13 +227,14 @@ export const VoiceOverPanel: React.FC = () => {
   };
 
   // Group voices by gender for UI
+  const allVoices = [...AVAILABLE_VOICES, ...clonedVoices];
   const groupedVoices = {
-    [VoiceGender.MALE]: AVAILABLE_VOICES.filter(v => v.gender === VoiceGender.MALE),
-    [VoiceGender.FEMALE]: AVAILABLE_VOICES.filter(v => v.gender === VoiceGender.FEMALE),
-    [VoiceGender.CHILD]: AVAILABLE_VOICES.filter(v => v.gender === VoiceGender.CHILD),
+    [VoiceGender.MALE]: allVoices.filter(v => v.gender === VoiceGender.MALE),
+    [VoiceGender.FEMALE]: allVoices.filter(v => v.gender === VoiceGender.FEMALE),
+    [VoiceGender.CHILD]: allVoices.filter(v => v.gender === VoiceGender.CHILD),
   };
 
-  const currentVoice = AVAILABLE_VOICES.find(v => v.id === selectedVoiceId);
+  const currentVoice = allVoices.find(v => v.id === selectedVoiceId);
   const currentPair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === selectedPairId);
 
   return (
@@ -198,7 +243,7 @@ export const VoiceOverPanel: React.FC = () => {
       {/* LEFT SIDEBAR - SETTINGS */}
       <div className="lg:col-span-4 flex flex-col gap-4 h-full overflow-hidden">
         <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl flex flex-col h-full overflow-hidden">
-          <div className="p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur-sm z-10">
+          <div className="p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur-sm z-10 flex justify-between items-center">
              <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                <Settings2 size={16} />
                Configuration
@@ -285,7 +330,27 @@ export const VoiceOverPanel: React.FC = () => {
               /* SINGLE VOICE SETTINGS */
               <>
                 <section>
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Voice Persona</h3>
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Voice Persona</h3>
+                        <div className="relative">
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                className="hidden" 
+                                accept="audio/*,video/*"
+                                onChange={handleVoiceUpload}
+                            />
+                            <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isAnalyzing}
+                                className="flex items-center gap-1.5 px-2 py-1 bg-slate-700 hover:bg-indigo-600 text-white text-[10px] font-bold uppercase rounded transition-colors"
+                            >
+                                {isAnalyzing ? <span className="animate-spin">⌛</span> : <Fingerprint size={12} />}
+                                {isAnalyzing ? 'Analyzing...' : 'Clone Voice'}
+                            </button>
+                        </div>
+                    </div>
+                  
                   <div className="space-y-4">
                     {(['MALE', 'FEMALE', 'CHILD'] as VoiceGender[]).map((category) => {
                       const voices = groupedVoices[category];
@@ -316,13 +381,14 @@ export const VoiceOverPanel: React.FC = () => {
                               >
                                 <div className={`w-2 h-2 rounded-full mr-3 shrink-0 ${
                                   selectedVoiceId === voice.id ? 'bg-indigo-400' : 'bg-slate-600'
-                                }`} />
+                                } ${voice.isCloned ? 'animate-pulse' : ''}`} />
                                 <div className="flex-1">
                                   <div className="text-sm font-medium flex items-center gap-2">
                                     {voice.name}
                                     {voice.isUrdu && <span className="text-[9px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded uppercase tracking-wider">Urdu</span>}
+                                    {voice.isCloned && <span className="text-[9px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded uppercase tracking-wider">Clone</span>}
                                   </div>
-                                  <div className="text-[10px] text-slate-500">{voice.description}</div>
+                                  <div className="text-[10px] text-slate-500 truncate max-w-[180px]">{voice.description}</div>
                                 </div>
                               </button>
                             ))}
@@ -467,6 +533,7 @@ export const VoiceOverPanel: React.FC = () => {
                     )}
                      
                      {(currentVoice?.isUrdu || (speakingStyle === SpeakingStyle.PODCAST && podcastLang === 'URDU')) && <span className="text-[10px] bg-green-900 text-green-300 px-1.5 rounded border border-green-800">Urdu</span>}
+                     {currentVoice?.isCloned && <span className="text-[10px] bg-purple-900 text-purple-300 px-1.5 rounded border border-purple-800">Cloned</span>}
                   </h3>
                   <span className="text-xs text-indigo-400 font-mono">
                     {audioBuffer ? `${audioBuffer.duration.toFixed(1)}s` : '--:--'}
