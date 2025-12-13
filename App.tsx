@@ -1,10 +1,10 @@
-
 import React, { useState } from 'react';
 import { AppMode } from './types';
 import { VoiceOverPanel } from './components/VoiceOverPanel';
 import { VideoToTextPanel } from './components/VideoToTextPanel';
 import { VideoEnhancerPanel } from './components/VideoEnhancerPanel';
-import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy } from 'lucide-react';
+import { ScriptToVideoPanel } from './components/ScriptToVideoPanel';
+import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap } from 'lucide-react';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(AppMode.VOICE_OVER);
@@ -67,6 +67,17 @@ const App: React.FC = () => {
                 AI Video Dubbing
                 </button>
                 <button
+                onClick={() => setMode(AppMode.SCRIPT_TO_VIDEO)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                    mode === AppMode.SCRIPT_TO_VIDEO
+                    ? 'bg-slate-800 text-white shadow-sm ring-1 ring-indigo-500/50'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+                >
+                <Zap size={16} className="text-yellow-400" />
+                Smart Lip-Sync
+                </button>
+                <button
                 onClick={() => setMode(AppMode.VIDEO_TO_TEXT)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     mode === AppMode.VIDEO_TO_TEXT
@@ -101,6 +112,10 @@ const App: React.FC = () => {
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_ENHANCER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
             >AI Dubbing</button>
              <button
+                onClick={() => setMode(AppMode.SCRIPT_TO_VIDEO)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.SCRIPT_TO_VIDEO ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
+            >Smart Lip-Sync</button>
+             <button
                 onClick={() => setMode(AppMode.VIDEO_TO_TEXT)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_TO_TEXT ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
             >Video to Text</button>
@@ -128,6 +143,16 @@ const App: React.FC = () => {
                 </p>
               </div>
               <VideoEnhancerPanel />
+            </div>
+          ) : mode === AppMode.SCRIPT_TO_VIDEO ? (
+            <div className="space-y-4">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-white mb-2">Smart Lip-Sync (Script-to-Video)</h2>
+                <p className="text-slate-400 max-w-2xl">
+                   Upload a video, type any new script, and the AI will clone the voice and automatically adjust the video playback speed to match your new text perfectly.
+                </p>
+              </div>
+              <ScriptToVideoPanel />
             </div>
           ) : (
             <div className="space-y-4">

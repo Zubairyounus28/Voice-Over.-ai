@@ -17,6 +17,7 @@ export enum AppMode {
   VOICE_OVER = 'VOICE_OVER',
   VIDEO_TO_TEXT = 'VIDEO_TO_TEXT',
   VIDEO_ENHANCER = 'VIDEO_ENHANCER',
+  SCRIPT_TO_VIDEO = 'SCRIPT_TO_VIDEO',
 }
 
 export interface VoiceOption {
