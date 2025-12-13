@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Play, Pause, Wand2, Download, Video, Mic2, RefreshCw, Languages } from 'lucide-react';
+import { Upload, Play, Pause, Wand2, Download, Video, Mic2, RefreshCw, Languages, User, Globe } from 'lucide-react';
 import { fileToBase64, decodeBase64, decodeAudioData } from '../utils/audioUtils';
 import { transcribeVideo, analyzeVoiceSample, improveScript, generateSpeech } from '../services/geminiService';
 import { VoiceOption, SpeakingStyle } from '../types';
@@ -45,7 +45,7 @@ export const VideoEnhancerPanel: React.FC = () => {
   const handleAnalyze = async () => {
     if (!file) return;
     setStep(2); // Move to loading UI
-    setStatusMsg('Analyzing video audio and voice characteristics...');
+    setStatusMsg('Analyzing video audio, age, accent, and voice characteristics...');
     
     try {
       const base64 = await fileToBase64(file);
@@ -64,7 +64,9 @@ export const VideoEnhancerPanel: React.FC = () => {
         geminiVoiceName: analysis.baseVoice,
         recommendedPitch: analysis.pitch,
         isCloned: true,
-        stylePrompt: analysis.stylePrompt
+        stylePrompt: analysis.stylePrompt,
+        age: analysis.age,
+        accent: analysis.accent
       };
       setVoiceProfile(clonedVoice);
       setEnhancedScript(text || ""); // Default to original
@@ -90,12 +92,18 @@ export const VideoEnhancerPanel: React.FC = () => {
       setStatusMsg('Generating high-fidelity cloned audio...');
       
       // 2. Generate Audio (Dub)
-      // We modify the style prompt to include the accent request
-      const accentPrompt = `Keep the voice's original character (pitch, gender, tone) but speak with a perfect ${targetAccent} accent/diction.`;
+      // We modify the style prompt to match the user request, or preserve original if needed
+      let accentPrompt = "";
+      
+      if (targetAccent === 'Original (Preserve)') {
+        accentPrompt = `Maintain the speaker's original ${voiceProfile.accent} accent and ${voiceProfile.age} voice characteristics exactly.`;
+      } else {
+        accentPrompt = `Keep the speaker's ${voiceProfile.age} voice quality (pitch/tone) but switch to a perfect ${targetAccent}.`;
+      }
       
       const modifiedVoice = {
          ...voiceProfile,
-         stylePrompt: `${voiceProfile.stylePrompt} ${accentPrompt}`
+         stylePrompt: `${voiceProfile.stylePrompt}. ${accentPrompt}`
       };
 
       const base64Audio = await generateSpeech(improved, modifiedVoice.id, SpeakingStyle.STANDARD, modifiedVoice);
@@ -189,14 +197,27 @@ export const VideoEnhancerPanel: React.FC = () => {
             {step === 3 && (
                <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700 space-y-6 animate-fade-in">
                   <div>
-                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Detected Voice</h3>
-                    <div className="bg-slate-900 p-3 rounded-lg flex items-center gap-3 border border-slate-700">
-                       <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white">
-                          <Mic2 size={16} />
+                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Detected Voice Profile</h3>
+                    <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 space-y-3">
+                       <div className="flex items-center gap-3">
+                           <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white shrink-0">
+                              <Mic2 size={20} />
+                           </div>
+                           <div>
+                              <div className="text-sm font-bold text-white">{voiceProfile?.name}</div>
+                              <div className="text-xs text-slate-500">{voiceProfile?.description}</div>
+                           </div>
                        </div>
-                       <div>
-                          <div className="text-sm font-bold text-white">{voiceProfile?.name}</div>
-                          <div className="text-xs text-slate-500">{voiceProfile?.description}</div>
+                       
+                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                             <User size={12} className="text-indigo-400" />
+                             <span>Age: <span className="text-slate-200">{voiceProfile?.age}</span></span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                             <Globe size={12} className="text-indigo-400" />
+                             <span>Accent: <span className="text-slate-200">{voiceProfile?.accent}</span></span>
+                          </div>
                        </div>
                     </div>
                   </div>
@@ -204,6 +225,14 @@ export const VideoEnhancerPanel: React.FC = () => {
                   <div>
                     <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Target Improvement</h3>
                     <div className="grid grid-cols-1 gap-2">
+                       <button 
+                            onClick={() => setTargetAccent('Original (Preserve)')}
+                            className={`p-3 text-left rounded-lg text-sm border transition-all ${targetAccent === 'Original (Preserve)' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+                       >
+                            <span className="font-bold">Original (Preserve)</span>
+                            <span className="block text-xs opacity-70">Keep {voiceProfile?.accent} Accent & Style</span>
+                       </button>
+
                        {['Standard Professional', 'American Accent', 'British Accent', 'English (Urdu Accent)', 'Urdu (Native)', 'Energetic Promo'].map(style => (
                           <button 
                             key={style}

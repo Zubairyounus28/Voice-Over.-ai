@@ -29,6 +29,8 @@ export interface VoiceOption {
   isUrdu?: boolean;
   isCloned?: boolean;
   stylePrompt?: string;
+  age?: string;
+  accent?: string;
 }
 
 export interface PodcastPair {

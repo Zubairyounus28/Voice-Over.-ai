@@ -69,6 +69,8 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
   baseVoice: string;
   pitch: number;
   gender: VoiceGender;
+  age: string;
+  accent: string;
 }> => {
   try {
     const response = await ai.models.generateContent({
@@ -79,14 +81,16 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
           { text: `Analyze this voice sample for a text-to-speech cloning application.
             
             1. Identify the Gender (MALE, FEMALE, CHILD).
-            2. Describe the voice's style (e.g., Raspy, Energetic, Soft, Authoritative, Deep, Breathly) and any accent.
-            3. Write a specific "Acting Prompt" to instruct an AI narrator to mimic this exact style.
-            4. Select the best Base Voice ID to start with from:
+            2. Estimate the Age (e.g., Child, Teenager, Young Adult, Middle Aged, Elderly).
+            3. Identify the Accent (e.g., American, British, Indian, Pakistani, Australian, etc.).
+            4. Describe the voice's unique style/tone (e.g., Raspy, Energetic, Soft, Authoritative, Deep, Breathly).
+            5. Write a very specific "Acting Prompt" that explicitly describes the Gender, Age, Accent, and Tone. This prompt will be used to tell an AI how to act. Example: "Act as a middle-aged man with a deep British accent. Speak in a calm, authoritative manner."
+            6. Select the best Base Voice ID to start with from:
                - 'Fenrir' (Deep/Authoritative Male)
                - 'Puck' (Standard/Energetic Male)
                - 'Kore' (Mature/Soft Female)
                - 'Zephyr' (Young/Lively Female)
-            5. Recommend a pitch shift (in cents, between -200 and +200) to match the speaker's pitch.
+            7. Recommend a pitch shift (in cents, between -200 and +200) to match the speaker's pitch.
             
             Return JSON only.`
           }
@@ -98,6 +102,8 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
           type: Type.OBJECT,
           properties: {
             gender: { type: Type.STRING, enum: ["MALE", "FEMALE", "CHILD"] },
+            age: { type: Type.STRING },
+            accent: { type: Type.STRING },
             styleDescription: { type: Type.STRING },
             actingPrompt: { type: Type.STRING },
             baseVoice: { type: Type.STRING, enum: ["Fenrir", "Puck", "Kore", "Zephyr"] },
@@ -115,7 +121,9 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
       stylePrompt: result.actingPrompt || "Speak naturally.",
       baseVoice: result.baseVoice || "Puck",
       pitch: result.pitch || 0,
-      gender: result.gender as VoiceGender || VoiceGender.MALE
+      gender: result.gender as VoiceGender || VoiceGender.MALE,
+      age: result.age || "Adult",
+      accent: result.accent || "Neutral"
     };
 
   } catch (error) {
