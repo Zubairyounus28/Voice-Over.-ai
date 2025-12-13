@@ -74,6 +74,8 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
   age: string;
   accent: string;
   language: string;
+  intonation?: string;
+  rhythm?: string;
 }> => {
   try {
     const response = await ai.models.generateContent({
@@ -81,20 +83,23 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
       contents: {
         parts: [
           { inlineData: { mimeType, data: base64Audio } },
-          { text: `Analyze this voice sample for a text-to-speech cloning application.
+          { text: `Analyze this voice sample for a professional high-fidelity AI voice cloning application.
             
             1. Identify the Gender (MALE, FEMALE, CHILD).
             2. Estimate the Age (e.g., Child, Teenager, Young Adult, Middle Aged, Elderly).
-            3. Identify the Accent (e.g., American, British, Indian, Pakistani, Australian, etc.).
-            4. Identify the Language being spoken (e.g., English, Urdu, Hindi, Spanish).
-            5. Describe the voice's unique style/tone (e.g., Raspy, Energetic, Soft, Authoritative, Deep, Breathly).
-            6. Write a very specific "Acting Prompt" that explicitly describes the Gender, Age, Accent, Language, and Tone. This prompt will be used to tell an AI how to act. Example: "Act as a middle-aged man speaking Urdu with a Pakistani accent. Speak in a calm, authoritative manner."
-            7. Select the best Base Voice ID to start with from:
+            3. Identify the Accent (e.g., American, British, Indian, Pakistani, Australian, etc.) and be specific about region if possible.
+            4. Identify the Language being spoken.
+            5. Analyze the **Intonation Pattern** (e.g., Rising at end, Flat/Monotone, Melodic, Expressive).
+            6. Analyze the **Speech Rhythm** (e.g., Fast, Slow, Staccato, Flowing, Pausing often).
+            7. Describe the voice's unique tone (e.g., Raspy, Energetic, Soft, Authoritative, Deep, Breathly).
+            8. Write an extremely specific "Acting Prompt" to help an AI mimic this person perfectly. Include instructions on vowel pronunciation, stress patterns, and emotional delivery. 
+               Example: "Act as a middle-aged Pakistani man. Speak with a heavy Urdu accent, emphasizing hard consonants. Use a melodic, storytelling intonation."
+            9. Select the best Base Voice ID to start with from:
                - 'Fenrir' (Deep/Authoritative Male)
                - 'Puck' (Standard/Energetic Male)
                - 'Kore' (Mature/Soft Female)
                - 'Zephyr' (Young/Lively Female)
-            8. Recommend a pitch shift (in cents, between -200 and +200) to match the speaker's pitch.
+            10. Recommend a pitch shift (in cents, between -200 and +200).
             
             Return JSON only.`
           }
@@ -109,6 +114,8 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
             age: { type: Type.STRING },
             accent: { type: Type.STRING },
             language: { type: Type.STRING },
+            intonation: { type: Type.STRING },
+            rhythm: { type: Type.STRING },
             styleDescription: { type: Type.STRING },
             actingPrompt: { type: Type.STRING },
             baseVoice: { type: Type.STRING, enum: ["Fenrir", "Puck", "Kore", "Zephyr"] },
@@ -129,7 +136,9 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
       gender: result.gender as VoiceGender || VoiceGender.MALE,
       age: result.age || "Adult",
       accent: result.accent || "Neutral",
-      language: result.language || "English"
+      language: result.language || "English",
+      intonation: result.intonation,
+      rhythm: result.rhythm
     };
 
   } catch (error) {
@@ -208,7 +217,6 @@ export const generateSpeech = async (
         }
      };
 
-     // The prompt needs to know it's a conversation
      finalPrompt = `TTS the following conversation between ${pair.speaker1.name} and ${pair.speaker2.name}.\n\n${text}`;
 
   } else {
@@ -231,7 +239,16 @@ export const generateSpeech = async (
 
       if (selectedVoice.isCloned && selectedVoice.stylePrompt) {
         // Use the cloned style prompt
-        finalPrompt = `Act as a professional voice actor. ${selectedVoice.stylePrompt} Narrate the following text: "${text}"`;
+        // Enhanced Instruction: Explicitly ask for realism
+        finalPrompt = `Task: Mimic the voice described below with extreme accuracy.
+        Voice Description: ${selectedVoice.stylePrompt}
+        
+        Instructions:
+        1. Maintain the exact accent, intonation, and rhythm described.
+        2. If the accent is non-native English (e.g. Urdu accent), ensure the pronunciation reflects that region's phonetic habits (e.g. vowel sounds, consonant stress).
+        3. Speak naturally and realistically.
+        
+        Text to narrate: "${text}"`;
       } else if (selectedVoice.isUrdu) {
         if (selectedVoice.id === 'urdu_authority_male') {
              finalPrompt = `Narrate the following text in Urdu with a bold, authoritative, and professional commercial tone (Pakistani accent). The delivery should be strong, impactful, and suitable for a high-energy advertisement. Text: ${text}`;

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Play, Pause, Wand2, Download, Video, Mic2, RefreshCw, Languages, User, Globe, Zap, Settings } from 'lucide-react';
+import { Upload, Play, Pause, Wand2, Download, Video, Mic2, RefreshCw, Languages, User, Globe, Zap, Settings, Film } from 'lucide-react';
 import { fileToBase64, decodeBase64, decodeAudioData } from '../utils/audioUtils';
 import { transcribeVideo, analyzeVoiceSample, improveScript, generateSpeech } from '../services/geminiService';
 import { VoiceOption, SpeakingStyle } from '../types';
@@ -10,13 +10,14 @@ export const VideoEnhancerPanel: React.FC = () => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   
   // Processing States
-  const [step, setStep] = useState<number>(0); // 0: Upload, 1: Analyze, 2: Configure, 3: Processing, 4: Done
+  const [step, setStep] = useState<number>(0); // 0: Upload, 1: Analyze, 2: Configure, 3: Processing, 4: Done, 5: Result
   const [statusMsg, setStatusMsg] = useState<string>('');
+  const [isRendering, setIsRendering] = useState<boolean>(false);
   
   // Data
   const [transcription, setTranscription] = useState<string>('');
   const [enhancedScript, setEnhancedScript] = useState<string>('');
-  const [voiceProfile, setVoiceProfile] = useState<VoiceOption | null>(null);
+  const [voiceProfile, setVoiceProfile] = useState<any | null>(null); // Extended VoiceOption
   const [targetAccent, setTargetAccent] = useState<string>('Standard Professional');
   const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true);
   
@@ -57,7 +58,7 @@ export const VideoEnhancerPanel: React.FC = () => {
       
       // 2. Analyze Voice Style
       const analysis = await analyzeVoiceSample(base64, file.type);
-      const clonedVoice: VoiceOption = {
+      const clonedVoice = {
         id: 'cloned_temp',
         name: 'Original Voice Clone',
         description: analysis.description,
@@ -68,7 +69,9 @@ export const VideoEnhancerPanel: React.FC = () => {
         stylePrompt: analysis.stylePrompt,
         age: analysis.age,
         accent: analysis.accent,
-        language: analysis.language
+        language: analysis.language,
+        intonation: analysis.intonation, // New field
+        rhythm: analysis.rhythm        // New field
       };
       setVoiceProfile(clonedVoice);
       setEnhancedScript(text || ""); // Default to original
@@ -107,12 +110,14 @@ export const VideoEnhancerPanel: React.FC = () => {
       let accentPrompt = "";
       
       if (targetAccent === 'Original (Preserve)') {
-        // Specific user requirement: 
-        // "If an Urdu video is uploaded, generate a voice-over in Urdu with the same accent, pitch, tone, emotions, and a natural, relaxing delivery.
-        //  If an English video is uploaded, the dubbing should be in English with the same vocal characteristics."
-        accentPrompt = `Speak in ${detectedLang}. Maintain the speaker's original ${voiceProfile.accent} accent, ${voiceProfile.age} voice characteristics, pitch, tone, and emotions. The delivery must be natural and relaxing.`;
+        // Strict instruction to preserve the original traits
+        accentPrompt = `Language: ${detectedLang}. 
+        Accent: Perfect ${voiceProfile.accent}. 
+        Intonation: ${voiceProfile.intonation || 'Natural'}. 
+        Rhythm: ${voiceProfile.rhythm || 'Conversational'}.
+        Maintain the speaker's original emotional tone and delivery exactly.`;
       } else if (targetAccent === 'English (Urdu Accent)') {
-         accentPrompt = `Speak in English with a perfect Urdu/Pakistani accent. Keep the speaker's ${voiceProfile.age} voice characteristics.`;
+         accentPrompt = `Language: English. Accent: Authentic Urdu/Pakistani. Maintain the speaker's ${voiceProfile.age} voice quality.`;
       } else {
         // Switch accent but keep voice quality
         accentPrompt = `Keep the speaker's ${voiceProfile.age} voice quality (pitch/tone) but speak in perfect ${targetAccent}.`;
@@ -160,17 +165,8 @@ export const VideoEnhancerPanel: React.FC = () => {
           // Adjust video speed to match audio duration
           const videoDur = videoRef.current.duration;
           const audioDur = audioBuffer.duration;
-          
-          // If video is 10s and audio is 5s, we need video to play 2x faster? No, we need video to finish in 5s.
-          // NewVideoDuration = AudioDuration
-          // PlaybackRate = OriginalDuration / TargetDuration
-          // Rate = 10 / 5 = 2. (Video plays twice as fast to finish in half time)
           const rate = videoDur / audioDur;
-          
-          // Clamp to reasonable limits to prevent extreme artifacts
           const clampedRate = Math.max(0.5, Math.min(rate, 2.0));
-          
-          console.log(`Smart Sync: Video ${videoDur}s, Audio ${audioDur}s. Rate: ${clampedRate}`);
           videoRef.current.playbackRate = clampedRate;
       } else {
           videoRef.current.playbackRate = 1.0;
@@ -189,9 +185,104 @@ export const VideoEnhancerPanel: React.FC = () => {
     }
   };
 
+  const handleDownloadVideo = () => {
+    if (!videoRef.current || !audioBuffer || !audioContextRef.current) return;
+
+    setIsRendering(true);
+    setIsPlaying(false);
+    
+    // Stop any current playback
+    videoRef.current.pause();
+    if(sourceNodeRef.current) { try { sourceNodeRef.current.stop() } catch(e){} }
+
+    try {
+        // 1. Setup Stream Capture
+        const videoStream = videoRef.current.captureStream();
+        const audioDest = audioContextRef.current.createMediaStreamDestination();
+        
+        // 2. Setup Audio Source for Recording
+        const source = audioContextRef.current.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioDest);
+        
+        // 3. Combine Tracks (Video from element, Audio from buffer)
+        const combinedStream = new MediaStream([
+            ...videoStream.getVideoTracks(),
+            ...audioDest.stream.getAudioTracks()
+        ]);
+
+        // 4. Setup Recorder
+        const recorder = new MediaRecorder(combinedStream, {
+            mimeType: 'video/webm;codecs=vp9,opus' // Standard web format
+        });
+        
+        const chunks: BlobPart[] = [];
+        recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunks.push(e.data);
+        };
+        
+        recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'dubbed_video.webm';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // Reset state
+            setIsRendering(false);
+            if (videoRef.current) {
+                videoRef.current.muted = true; // keep muted
+                videoRef.current.playbackRate = 1.0;
+                videoRef.current.currentTime = 0;
+            }
+        };
+
+        // 5. Start Playback & Recording
+        // Calculate rate again for sync
+        if (isSyncEnabled && videoRef.current.duration && audioBuffer.duration) {
+             const rate = videoRef.current.duration / audioBuffer.duration;
+             videoRef.current.playbackRate = Math.max(0.5, Math.min(rate, 2.0));
+        } else {
+             videoRef.current.playbackRate = 1.0;
+        }
+
+        videoRef.current.currentTime = 0;
+        videoRef.current.muted = true; // Important: Mute the element itself so we don't record the original audio track if it leaks, though we only grabbed video track.
+
+        recorder.start();
+        videoRef.current.play();
+        source.start(0);
+
+        // 6. Stop when audio ends
+        source.onended = () => {
+            recorder.stop();
+            videoRef.current?.pause();
+        };
+
+    } catch (e) {
+        console.error("Recording failed", e);
+        alert("Video export failed. Your browser might not support MediaRecorder with these codecs.");
+        setIsRendering(false);
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col gap-6">
+    <div className="h-full flex flex-col gap-6 relative">
       
+      {/* Rendering Overlay */}
+      {isRendering && (
+          <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl animate-fade-in">
+              <div className="w-16 h-16 border-4 border-red-500/30 border-t-red-500 rounded-full animate-spin mb-6"></div>
+              <h3 className="text-2xl font-bold text-white mb-2">Rendering Video...</h3>
+              <p className="text-slate-400">Please wait while we record the dubbed output.</p>
+              <p className="text-xs text-slate-500 mt-4">Do not switch tabs.</p>
+          </div>
+      )}
+
       {/* Top Section: Steps */}
       <div className="flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700">
          <div className={`flex items-center gap-2 ${step >= 1 ? 'text-indigo-400' : 'text-slate-500'}`}>
@@ -259,6 +350,16 @@ export const VideoEnhancerPanel: React.FC = () => {
                              <span>Lang: <span className="text-slate-200">{voiceProfile?.language || 'Auto'}</span></span>
                           </div>
                        </div>
+                       
+                       {/* Enhanced Details */}
+                       <div className="grid grid-cols-1 gap-1 pt-2 border-t border-slate-800">
+                          <div className="text-[10px] text-slate-400 flex justify-between">
+                            <span>Accent:</span> <span className="text-slate-300">{voiceProfile?.accent}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 flex justify-between">
+                            <span>Rhythm:</span> <span className="text-slate-300">{voiceProfile?.rhythm}</span>
+                          </div>
+                       </div>
                     </div>
                   </div>
 
@@ -270,7 +371,7 @@ export const VideoEnhancerPanel: React.FC = () => {
                             className={`p-3 text-left rounded-lg text-sm border transition-all ${targetAccent === 'Original (Preserve)' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
                        >
                             <span className="font-bold">Original (Preserve)</span>
-                            <span className="block text-xs opacity-70">Keep Language, Accent & Tone</span>
+                            <span className="block text-xs opacity-70">Strictly match accent & intonation</span>
                        </button>
 
                        {['Standard Professional', 'American Accent', 'British Accent', 'English (Urdu Accent)', 'Urdu (Native)', 'Energetic Promo'].map(style => (
@@ -332,15 +433,23 @@ export const VideoEnhancerPanel: React.FC = () => {
                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${isSyncEnabled ? 'left-6' : 'left-1'}`}></div>
                       </button>
                   </div>
-                  <p className="text-xs text-slate-500 text-center">Syncs video speed to match voice duration</p>
                   
-                  <button 
-                    onClick={() => setStep(3)}
-                    className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium text-sm flex items-center justify-center gap-2"
-                  >
-                     <RefreshCw size={16} />
-                     Try Another Style
-                  </button>
+                  <div className="flex gap-2">
+                     <button 
+                        onClick={handleDownloadVideo}
+                        className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                     >
+                        <Film size={16} />
+                        Download Video
+                     </button>
+                     
+                     <button 
+                        onClick={() => setStep(3)}
+                        className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium text-sm flex items-center justify-center"
+                     >
+                        <RefreshCw size={16} />
+                     </button>
+                  </div>
                </div>
             )}
          </div>
@@ -355,9 +464,10 @@ export const VideoEnhancerPanel: React.FC = () => {
                      className="max-h-full max-w-full"
                      onLoadedMetadata={step === 1 ? handleAnalyze : undefined}
                      controls={false}
+                     crossOrigin="anonymous" 
                   />
                   {/* Overlay Controls */}
-                  {step === 5 && (
+                  {step === 5 && !isRendering && (
                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 group hover:bg-black/40 transition-colors">
                         <button 
                            onClick={togglePlayback}
