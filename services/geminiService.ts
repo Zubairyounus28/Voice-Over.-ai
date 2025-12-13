@@ -194,6 +194,10 @@ export const generateSpeech = async (
              finalPrompt = `Narrate the following text in Urdu with a bold, authoritative, and professional commercial tone (Pakistani accent). The delivery should be strong, impactful, and suitable for a high-energy advertisement. Text: ${text}`;
         } else if (selectedVoice.id === 'urdu_pro_emotional') {
              finalPrompt = `Narrate the following text in Urdu (Pakistani accent) with deep natural emotion and professionalism. The tone should be warm, trustworthy, and sophisticated, like a high-quality brand ambassador or Dr. Saifuddin style. Use expressive intonation and natural pacing. Text: ${text}`;
+        } else if (selectedVoice.id === 'urdu_wise_old') {
+             finalPrompt = `Act as an elderly, wise storyteller. Narrate the following text in Urdu (Pakistani accent) with a relaxed, emotional, and deep tone. The voice should sound experienced, calm, and heartfelt. Text: ${text}`;
+        } else if (selectedVoice.id === 'urdu_young_soft') {
+             finalPrompt = `Act as a young, emotional man. Narrate the following text in Urdu (Pakistani accent) with a soft, relaxed, and heartfelt tone. The delivery should be gentle, calm, and touching. Text: ${text}`;
         } else {
              finalPrompt = `Narrate the following text in Urdu with a natural Pakistani accent: ${text}`;
         }

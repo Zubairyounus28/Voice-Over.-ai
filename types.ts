@@ -44,6 +44,8 @@ export const AVAILABLE_VOICES: VoiceOption[] = [
   { id: 'principal_male', name: 'Principal (Male)', gender: VoiceGender.MALE, description: 'Authoritative, age 60', geminiVoiceName: 'Fenrir', recommendedPitch: -150 },
   { id: 'urdu_authority_male', name: 'Urdu Authority (Male)', gender: VoiceGender.MALE, description: 'Bold, Ad Style', geminiVoiceName: 'Fenrir', recommendedPitch: -100, isUrdu: true },
   { id: 'urdu_pro_emotional', name: 'Urdu Emotional (Pro)', gender: VoiceGender.MALE, description: 'Natural, Heartfelt, Professional', geminiVoiceName: 'Fenrir', recommendedPitch: -60, isUrdu: true },
+  { id: 'urdu_wise_old', name: 'Urdu Wise Old Man', gender: VoiceGender.MALE, description: 'Relaxed, Elderly, Emotional', geminiVoiceName: 'Fenrir', recommendedPitch: -160, isUrdu: true },
+  { id: 'urdu_young_soft', name: 'Urdu Young Man', gender: VoiceGender.MALE, description: 'Soft, Relaxed, Emotional', geminiVoiceName: 'Puck', recommendedPitch: -30, isUrdu: true },
   { id: 'v2', name: 'Standard Man', gender: VoiceGender.MALE, description: 'Conversational, clear', geminiVoiceName: 'Puck', recommendedPitch: 0 },
   { id: 'v5', name: 'Energetic Man', gender: VoiceGender.MALE, description: 'Dynamic, lively', geminiVoiceName: 'Puck', recommendedPitch: 100 },
   { id: 'urdu_1', name: 'Urdu Narrator', gender: VoiceGender.MALE, description: 'Pakistani Accent', geminiVoiceName: 'Puck', recommendedPitch: -50, isUrdu: true },
