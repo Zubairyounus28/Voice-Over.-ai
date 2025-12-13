@@ -45,7 +45,7 @@ export const VideoEnhancerPanel: React.FC = () => {
   const handleAnalyze = async () => {
     if (!file) return;
     setStep(2); // Move to loading UI
-    setStatusMsg('Analyzing video audio, age, accent, and voice characteristics...');
+    setStatusMsg('Analyzing video audio, language, age, accent, and voice characteristics...');
     
     try {
       const base64 = await fileToBase64(file);
@@ -66,7 +66,8 @@ export const VideoEnhancerPanel: React.FC = () => {
         isCloned: true,
         stylePrompt: analysis.stylePrompt,
         age: analysis.age,
-        accent: analysis.accent
+        accent: analysis.accent,
+        language: analysis.language
       };
       setVoiceProfile(clonedVoice);
       setEnhancedScript(text || ""); // Default to original
@@ -85,20 +86,35 @@ export const VideoEnhancerPanel: React.FC = () => {
     setStatusMsg('Enhancing script grammar and style...');
 
     try {
+      // Determine detected language (fallback to English if undefined)
+      const detectedLang = voiceProfile.language || "English";
+
       // 1. Improve Script
-      const improved = await improveScript(transcription, targetAccent);
+      // If targetAccent is "Original", we pass "Natural and Grammatically Correct in [Detected Language]".
+      let scriptStyle = targetAccent;
+      if (targetAccent === 'Original (Preserve)') {
+         scriptStyle = `Natural, Relaxing, and Grammatically Correct in ${detectedLang}`;
+      }
+      
+      const improved = await improveScript(transcription, scriptStyle);
       setEnhancedScript(improved);
       
       setStatusMsg('Generating high-fidelity cloned audio...');
       
       // 2. Generate Audio (Dub)
-      // We modify the style prompt to match the user request, or preserve original if needed
+      // Modify the style prompt based on user request logic
       let accentPrompt = "";
       
       if (targetAccent === 'Original (Preserve)') {
-        accentPrompt = `Maintain the speaker's original ${voiceProfile.accent} accent and ${voiceProfile.age} voice characteristics exactly.`;
+        // Specific user requirement: 
+        // "If an Urdu video is uploaded, generate a voice-over in Urdu with the same accent, pitch, tone, emotions, and a natural, relaxing delivery.
+        //  If an English video is uploaded, the dubbing should be in English with the same vocal characteristics."
+        accentPrompt = `Speak in ${detectedLang}. Maintain the speaker's original ${voiceProfile.accent} accent, ${voiceProfile.age} voice characteristics, pitch, tone, and emotions. The delivery must be natural and relaxing.`;
+      } else if (targetAccent === 'English (Urdu Accent)') {
+         accentPrompt = `Speak in English with a perfect Urdu/Pakistani accent. Keep the speaker's ${voiceProfile.age} voice characteristics.`;
       } else {
-        accentPrompt = `Keep the speaker's ${voiceProfile.age} voice quality (pitch/tone) but switch to a perfect ${targetAccent}.`;
+        // Switch accent but keep voice quality
+        accentPrompt = `Keep the speaker's ${voiceProfile.age} voice quality (pitch/tone) but speak in perfect ${targetAccent}.`;
       }
       
       const modifiedVoice = {
@@ -117,6 +133,7 @@ export const VideoEnhancerPanel: React.FC = () => {
       
       setStep(5); // Done
     } catch (e) {
+      console.error(e);
       alert("Generation failed.");
       setStep(3);
     }
@@ -216,7 +233,7 @@ export const VideoEnhancerPanel: React.FC = () => {
                           </div>
                           <div className="flex items-center gap-2 text-xs text-slate-400">
                              <Globe size={12} className="text-indigo-400" />
-                             <span>Accent: <span className="text-slate-200">{voiceProfile?.accent}</span></span>
+                             <span>Lang: <span className="text-slate-200">{voiceProfile?.language || 'Auto'}</span></span>
                           </div>
                        </div>
                     </div>
@@ -230,7 +247,7 @@ export const VideoEnhancerPanel: React.FC = () => {
                             className={`p-3 text-left rounded-lg text-sm border transition-all ${targetAccent === 'Original (Preserve)' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
                        >
                             <span className="font-bold">Original (Preserve)</span>
-                            <span className="block text-xs opacity-70">Keep {voiceProfile?.accent} Accent & Style</span>
+                            <span className="block text-xs opacity-70">Keep Language, Accent & Tone</span>
                        </button>
 
                        {['Standard Professional', 'American Accent', 'British Accent', 'English (Urdu Accent)', 'Urdu (Native)', 'Energetic Promo'].map(style => (

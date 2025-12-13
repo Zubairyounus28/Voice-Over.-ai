@@ -31,6 +31,7 @@ export interface VoiceOption {
   stylePrompt?: string;
   age?: string;
   accent?: string;
+  language?: string;
 }
 
 export interface PodcastPair {
