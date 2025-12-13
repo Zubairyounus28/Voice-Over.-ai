@@ -32,6 +32,7 @@ export const translateToUrdu = async (text: string): Promise<string> => {
 
 /**
  * Improves the script for a specific accent/style.
+ * Includes fallback to original text on error.
  */
 export const improveScript = async (text: string, targetStyle: string): Promise<string> => {
   try {
@@ -46,7 +47,7 @@ export const improveScript = async (text: string, targetStyle: string): Promise<
         3. Ensure the sentence structure flows naturally for speech.
         4. Keep the original meaning intact.
         5. DO NOT translate the text unless the style explicitly requests a specific language (e.g. "English" or "Urdu"). Preserve the original language of the text.
-        6. CRITICAL FOR LIP-SYNC: Attempt to match the syllable count, sentence length, and rhythm of the original text as closely as possible. The goal is for the spoken duration to match the original video.
+        6. CRITICAL FOR LIP-SYNC: Attempt to match the syllable count, sentence length, and rhythm of the original text as closely as possible.
         7. Return ONLY the rewritten text.
 
         Original Text:
@@ -56,8 +57,9 @@ export const improveScript = async (text: string, targetStyle: string): Promise<
     
     return response.text?.trim() || text;
   } catch (error) {
-    console.error("Script improvement error:", error);
-    throw error;
+    console.warn("Script improvement failed (Network/API Error). Using original text as fallback.", error);
+    // Fallback to original text so the flow doesn't break
+    return text;
   }
 };
 
@@ -143,7 +145,7 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
 
   } catch (error) {
     console.error("Voice analysis error:", error);
-    throw new Error("Failed to analyze voice sample");
+    throw new Error("Failed to analyze voice sample. File might be too large or format unsupported.");
   }
 };
 
@@ -193,6 +195,8 @@ export const generateSpeech = async (
     customVoiceData?: any 
 ) => {
   const model = "gemini-2.5-flash-preview-tts";
+  
+  // Strict modality config
   let config: any = {
     responseModalities: [Modality.AUDIO],
   };
@@ -290,8 +294,14 @@ export const generateSpeech = async (
     const candidate = response.candidates?.[0];
     const part = candidate?.content?.parts?.[0];
 
+    // ERROR CHECK: Did the model refuse and return text?
+    if (part?.text && !part?.inlineData) {
+        console.warn("Gemini returned text instead of audio (Safety/Refusal):", part.text);
+        throw new Error("The AI model refused to generate audio for this prompt. Please try simpler text or a different style.");
+    }
+
     if (!part || !part.inlineData || !part.inlineData.data) {
-      throw new Error("No audio data returned from Gemini.");
+      throw new Error("No audio data returned from Gemini. The request may have timed out or been blocked.");
     }
 
     return part.inlineData.data; 
