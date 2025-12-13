@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Play, Pause, Wand2, Download, Video, Mic2, RefreshCw, Languages, User, Globe } from 'lucide-react';
+import { Upload, Play, Pause, Wand2, Download, Video, Mic2, RefreshCw, Languages, User, Globe, Zap, Settings } from 'lucide-react';
 import { fileToBase64, decodeBase64, decodeAudioData } from '../utils/audioUtils';
 import { transcribeVideo, analyzeVoiceSample, improveScript, generateSpeech } from '../services/geminiService';
 import { VoiceOption, SpeakingStyle } from '../types';
@@ -18,6 +18,7 @@ export const VideoEnhancerPanel: React.FC = () => {
   const [enhancedScript, setEnhancedScript] = useState<string>('');
   const [voiceProfile, setVoiceProfile] = useState<VoiceOption | null>(null);
   const [targetAccent, setTargetAccent] = useState<string>('Standard Professional');
+  const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true);
   
   // Audio Playback
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
@@ -153,6 +154,28 @@ export const VideoEnhancerPanel: React.FC = () => {
       // Play
       videoRef.current.currentTime = 0; // Restart for sync simplicity in this demo
       videoRef.current.muted = true; // Mute original
+      
+      // --- Smart Lip Sync Logic ---
+      if (isSyncEnabled && videoRef.current.duration && audioBuffer.duration) {
+          // Adjust video speed to match audio duration
+          const videoDur = videoRef.current.duration;
+          const audioDur = audioBuffer.duration;
+          
+          // If video is 10s and audio is 5s, we need video to play 2x faster? No, we need video to finish in 5s.
+          // NewVideoDuration = AudioDuration
+          // PlaybackRate = OriginalDuration / TargetDuration
+          // Rate = 10 / 5 = 2. (Video plays twice as fast to finish in half time)
+          const rate = videoDur / audioDur;
+          
+          // Clamp to reasonable limits to prevent extreme artifacts
+          const clampedRate = Math.max(0.5, Math.min(rate, 2.0));
+          
+          console.log(`Smart Sync: Video ${videoDur}s, Audio ${audioDur}s. Rate: ${clampedRate}`);
+          videoRef.current.playbackRate = clampedRate;
+      } else {
+          videoRef.current.playbackRate = 1.0;
+      }
+
       videoRef.current.play();
 
       const source = audioContextRef.current.createBufferSource();
@@ -295,6 +318,21 @@ export const VideoEnhancerPanel: React.FC = () => {
                      <h3 className="text-lg font-bold text-white">Enhancement Complete!</h3>
                      <p className="text-sm text-slate-400">Audio improved and dubbed.</p>
                   </div>
+
+                  {/* Smart Sync Toggle */}
+                  <div className="bg-slate-900 rounded-lg p-3 flex items-center justify-between border border-slate-700">
+                      <div className="flex items-center gap-2">
+                          <Zap size={16} className={isSyncEnabled ? "text-yellow-400" : "text-slate-500"} />
+                          <div className="text-sm font-medium text-slate-300">Smart Lip-Sync</div>
+                      </div>
+                      <button 
+                        onClick={() => setIsSyncEnabled(!isSyncEnabled)}
+                        className={`w-10 h-5 rounded-full relative transition-colors ${isSyncEnabled ? 'bg-indigo-600' : 'bg-slate-700'}`}
+                      >
+                          <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${isSyncEnabled ? 'left-6' : 'left-1'}`}></div>
+                      </button>
+                  </div>
+                  <p className="text-xs text-slate-500 text-center">Syncs video speed to match voice duration</p>
                   
                   <button 
                     onClick={() => setStep(3)}

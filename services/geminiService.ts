@@ -46,7 +46,8 @@ export const improveScript = async (text: string, targetStyle: string): Promise<
         3. Ensure the sentence structure flows naturally for speech.
         4. Keep the original meaning intact.
         5. DO NOT translate the text unless the style explicitly requests a specific language (e.g. "English" or "Urdu"). Preserve the original language of the text.
-        6. Return ONLY the rewritten text.
+        6. CRITICAL FOR LIP-SYNC: Attempt to match the syllable count, sentence length, and rhythm of the original text as closely as possible. The goal is for the spoken duration to match the original video.
+        7. Return ONLY the rewritten text.
 
         Original Text:
         "${text}"
