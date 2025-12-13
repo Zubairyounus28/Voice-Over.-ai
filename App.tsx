@@ -196,8 +196,8 @@ const App: React.FC = () => {
                           <button onClick={() => copyToClipboard('99390103254707')} className="text-slate-500 hover:text-indigo-400"><Copy size={14}/></button>
                        </div>
                        <div className="flex items-center justify-between group">
-                          <div className="text-slate-400 font-mono text-xs break-all">PK81MEZN009939010325470</div>
-                          <button onClick={() => copyToClipboard('PK81MEZN009939010325470')} className="text-slate-500 hover:text-indigo-400"><Copy size={14}/></button>
+                          <div className="text-slate-400 font-mono text-xs break-all">PK81MEZN0099390103254707</div>
+                          <button onClick={() => copyToClipboard('PK81MEZN0099390103254707')} className="text-slate-500 hover:text-indigo-400"><Copy size={14}/></button>
                        </div>
                     </div>
                  </div>
