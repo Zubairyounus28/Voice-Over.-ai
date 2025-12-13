@@ -31,6 +31,35 @@ export const translateToUrdu = async (text: string): Promise<string> => {
 };
 
 /**
+ * Improves the script for a specific accent/style.
+ */
+export const improveScript = async (text: string, targetStyle: string): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ parts: [{ text: `
+        Act as a professional script editor. Rewrite the following transcript to match a "${targetStyle}" style. 
+        
+        Rules:
+        1. Fix any grammatical errors.
+        2. Improve vocabulary to be more professional or suitable for the requested style.
+        3. Ensure the sentence structure flows naturally for speech.
+        4. Keep the original meaning intact.
+        5. Return ONLY the rewritten text.
+
+        Original Text:
+        "${text}"
+      ` }] }],
+    });
+    
+    return response.text?.trim() || text;
+  } catch (error) {
+    console.error("Script improvement error:", error);
+    throw error;
+  }
+};
+
+/**
  * Analyzes an audio sample to create a "Cloned" voice profile (Style Matching).
  */
 export const analyzeVoiceSample = async (base64Audio: string, mimeType: string): Promise<{

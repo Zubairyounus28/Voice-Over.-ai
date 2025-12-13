@@ -16,6 +16,7 @@ export enum SpeakingStyle {
 export enum AppMode {
   VOICE_OVER = 'VOICE_OVER',
   VIDEO_TO_TEXT = 'VIDEO_TO_TEXT',
+  VIDEO_ENHANCER = 'VIDEO_ENHANCER',
 }
 
 export interface VoiceOption {

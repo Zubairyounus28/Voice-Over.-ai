@@ -1,8 +1,10 @@
+
 import React, { useState } from 'react';
 import { AppMode } from './types';
 import { VoiceOverPanel } from './components/VoiceOverPanel';
 import { VideoToTextPanel } from './components/VideoToTextPanel';
-import { Mic, FileVideo, Sparkles } from 'lucide-react';
+import { VideoEnhancerPanel } from './components/VideoEnhancerPanel';
+import { Mic, FileVideo, Sparkles, Wand2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(AppMode.VOICE_OVER);
@@ -21,10 +23,10 @@ const App: React.FC = () => {
             </h1>
           </div>
           
-          <nav className="flex bg-slate-900 p-1 rounded-xl border border-slate-800">
+          <nav className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 overflow-x-auto">
             <button
               onClick={() => setMode(AppMode.VOICE_OVER)}
-              className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                 mode === AppMode.VOICE_OVER
                   ? 'bg-slate-800 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -34,8 +36,19 @@ const App: React.FC = () => {
               Voice Generator
             </button>
             <button
+              onClick={() => setMode(AppMode.VIDEO_ENHANCER)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                mode === AppMode.VIDEO_ENHANCER
+                  ? 'bg-slate-800 text-white shadow-sm ring-1 ring-indigo-500/50'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <Wand2 size={16} className="text-indigo-400" />
+              AI Video Dubbing
+            </button>
+            <button
               onClick={() => setMode(AppMode.VIDEO_TO_TEXT)}
-              className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                 mode === AppMode.VIDEO_TO_TEXT
                   ? 'bg-slate-800 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
@@ -60,6 +73,16 @@ const App: React.FC = () => {
                 </p>
               </div>
               <VoiceOverPanel />
+            </div>
+          ) : mode === AppMode.VIDEO_ENHANCER ? (
+            <div className="space-y-4">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-white mb-2">AI Video Dubbing & Enhancer</h2>
+                <p className="text-slate-400 max-w-2xl">
+                   Upload a video to automatically enhance the speaker's accent and grammar while preserving their unique voice style. <span className="text-indigo-400 text-xs uppercase tracking-wide border border-indigo-500/30 px-2 py-0.5 rounded ml-2">Beta</span>
+                </p>
+              </div>
+              <VideoEnhancerPanel />
             </div>
           ) : (
             <div className="space-y-4">
