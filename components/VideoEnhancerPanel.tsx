@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Play, Pause, Wand2, Download, Video, Mic2, RefreshCw, Languages, User, Globe, Zap, Settings, Film } from 'lucide-react';
+import { Upload, Play, Pause, Wand2, Download, Video, Mic2, RefreshCw, Languages, User, Globe, Zap, Settings, Film, Edit3 } from 'lucide-react';
 import { fileToBase64, decodeBase64, decodeAudioData } from '../utils/audioUtils';
 import { transcribeVideo, analyzeVoiceSample, improveScript, generateSpeech } from '../services/geminiService';
 import { VoiceOption, SpeakingStyle } from '../types';
@@ -13,6 +13,7 @@ export const VideoEnhancerPanel: React.FC = () => {
   const [step, setStep] = useState<number>(0); // 0: Upload, 1: Analyze, 2: Configure, 3: Processing, 4: Done, 5: Result
   const [statusMsg, setStatusMsg] = useState<string>('');
   const [isRendering, setIsRendering] = useState<boolean>(false);
+  const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
   
   // Data
   const [transcription, setTranscription] = useState<string>('');
@@ -142,6 +143,55 @@ export const VideoEnhancerPanel: React.FC = () => {
       console.error(e);
       alert("Generation failed.");
       setStep(3);
+    }
+  };
+
+  const handleRegenerateAudio = async () => {
+    if (!enhancedScript || !voiceProfile) return;
+    setIsRegenerating(true);
+    
+    // Stop playback if active
+    if (isPlaying && videoRef.current) {
+         videoRef.current.pause();
+         if(sourceNodeRef.current) { try { sourceNodeRef.current.stop() } catch(e){} }
+         setIsPlaying(false);
+    }
+
+    try {
+      const detectedLang = voiceProfile.language || "English";
+      let accentPrompt = "";
+      
+      // Re-apply accent logic
+      if (targetAccent === 'Original (Preserve)') {
+        accentPrompt = `Language: ${detectedLang}. 
+        Accent: Perfect ${voiceProfile.accent}. 
+        Intonation: ${voiceProfile.intonation || 'Natural'}. 
+        Rhythm: ${voiceProfile.rhythm || 'Conversational'}.
+        Maintain the speaker's original emotional tone and delivery exactly.`;
+      } else if (targetAccent === 'English (Urdu Accent)') {
+         accentPrompt = `Language: English. Accent: Authentic Urdu/Pakistani. Maintain the speaker's ${voiceProfile.age} voice quality.`;
+      } else {
+        accentPrompt = `Keep the speaker's ${voiceProfile.age} voice quality (pitch/tone) but speak in perfect ${targetAccent}.`;
+      }
+      
+      const modifiedVoice = {
+         ...voiceProfile,
+         stylePrompt: `${voiceProfile.stylePrompt}. ${accentPrompt}`
+      };
+
+      // Generate with current text
+      const base64Audio = await generateSpeech(enhancedScript, modifiedVoice.id, SpeakingStyle.STANDARD, modifiedVoice);
+      
+      const rawBytes = decodeBase64(base64Audio);
+      if (audioContextRef.current) {
+         const buffer = await decodeAudioData(rawBytes, audioContextRef.current);
+         setAudioBuffer(buffer);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Regeneration failed.");
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -444,10 +494,20 @@ export const VideoEnhancerPanel: React.FC = () => {
                      </button>
                      
                      <button 
+                        onClick={handleRegenerateAudio}
+                        disabled={isRegenerating}
+                        className="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium text-sm flex items-center justify-center disabled:opacity-50"
+                        title="Regenerate Audio from Edited Script"
+                     >
+                        {isRegenerating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <RefreshCw size={16} />}
+                     </button>
+
+                     <button 
                         onClick={() => setStep(3)}
                         className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium text-sm flex items-center justify-center"
+                        title="Reset / Try Another Style"
                      >
-                        <RefreshCw size={16} />
+                        <Settings size={16} />
                      </button>
                   </div>
                </div>
@@ -468,10 +528,10 @@ export const VideoEnhancerPanel: React.FC = () => {
                   />
                   {/* Overlay Controls */}
                   {step === 5 && !isRendering && (
-                     <div className="absolute inset-0 flex items-center justify-center bg-black/20 group hover:bg-black/40 transition-colors">
+                     <div className="absolute inset-0 flex items-center justify-center bg-black/20 group hover:bg-black/40 transition-colors pointer-events-none">
                         <button 
                            onClick={togglePlayback}
-                           className="w-20 h-20 bg-white/90 hover:bg-white text-slate-900 rounded-full flex items-center justify-center transform hover:scale-105 transition-all shadow-xl"
+                           className="w-20 h-20 bg-white/90 hover:bg-white text-slate-900 rounded-full flex items-center justify-center transform hover:scale-105 transition-all shadow-xl pointer-events-auto"
                         >
                            {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" className="ml-1" />}
                         </button>
@@ -490,11 +550,21 @@ export const VideoEnhancerPanel: React.FC = () => {
                </div>
             )}
             
-            {/* Script Preview (Only if finished) */}
+            {/* Script Preview / Editor */}
             {step === 5 && (
-               <div className="h-40 bg-slate-900 border-t border-slate-800 p-4 overflow-y-auto">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Enhanced Script</h4>
-                  <p className="text-slate-300 text-sm leading-relaxed">{enhancedScript}</p>
+               <div className="h-48 bg-slate-900 border-t border-slate-800 flex flex-col">
+                  <div className="flex justify-between items-center px-4 py-2 bg-slate-900/50 border-b border-slate-800">
+                     <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                        <Edit3 size={12} />
+                        Enhanced Script (Editable)
+                     </h4>
+                     <span className="text-[10px] text-slate-500">Edit text & press Regenerate button</span>
+                  </div>
+                  <textarea 
+                    value={enhancedScript}
+                    onChange={(e) => setEnhancedScript(e.target.value)}
+                    className="flex-1 w-full bg-transparent p-4 text-slate-300 text-sm leading-relaxed resize-none focus:outline-none focus:bg-slate-800/50 transition-colors"
+                  />
                </div>
             )}
          </div>
