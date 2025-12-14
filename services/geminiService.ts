@@ -31,7 +31,7 @@ export const translateToUrdu = async (text: string): Promise<string> => {
 };
 
 /**
- * Optimizes script for TTS performance (Better flow, punctuation, pronunciation hints).
+ * Optimizes script for TTS performance.
  */
 export const optimizeScriptForSpeech = async (text: string): Promise<string> => {
   try {
@@ -39,29 +39,19 @@ export const optimizeScriptForSpeech = async (text: string): Promise<string> => 
       model: "gemini-2.5-flash",
       contents: [{ parts: [{ text: `
         Act as a professional Voice Director. Rewrite the following script to be optimized for Text-to-Speech generation.
-        
-        Objectives:
-        1. Fix any grammatical errors or awkward phrasing.
-        2. Insert punctuation (commas, ellipses, periods) to create natural "breathing" pauses and rhythm.
-        3. Break run-on sentences into shorter, punchier lines where appropriate for impact.
-        4. Ensure the tone is natural and conversational (unless it looks strictly formal).
-        5. Return ONLY the enhanced text. Do not add intro/outro notes.
-
-        Original Script:
-        "${text}"
+        Objectives: Fix grammatical errors, insert punctuation for breathing, break run-on sentences.
+        Original Script: "${text}"
       ` }] }],
     });
-    
     return response.text?.trim() || text;
   } catch (error) {
-    console.warn("Script optimization failed. Using original text.", error);
+    console.warn("Script optimization failed.", error);
     return text;
   }
 };
 
 /**
- * Translates script for Video Dubbing/Translation.
- * Focuses on natural flow and retaining meaning.
+ * Translates script for Video Dubbing.
  */
 export const translateScript = async (text: string, targetLanguage: string): Promise<string> => {
   try {
@@ -69,28 +59,19 @@ export const translateScript = async (text: string, targetLanguage: string): Pro
       model: "gemini-2.5-flash",
       contents: [{ parts: [{ text: `
         Act as a professional dubbing translator. Translate the following video transcript into "${targetLanguage}".
-        
-        Rules:
-        1. The translation must be natural and colloquial for a native speaker of ${targetLanguage}.
-        2. CRITICAL: Try to match the approximate length and rhythm of the original sentences to help with lip-syncing.
-        3. Maintain the original emotional tone (whether it's serious, funny, energetic, etc.).
-        4. Do not include notes, only return the translated text.
-
-        Original Text:
-        "${text}"
+        Rules: Natural colloquial flow, match approximate length/rhythm for lip-sync, maintain emotional tone.
+        Original Text: "${text}"
       ` }] }],
     });
-    
     return response.text?.trim() || text;
   } catch (error) {
-    console.warn("Translation failed (Network/API Error). Using original text.", error);
+    console.warn("Translation failed.", error);
     return text;
   }
 };
 
 /**
  * Improves the script for a specific accent/style.
- * Includes fallback to original text on error.
  */
 export const improveScript = async (text: string, targetStyle: string): Promise<string> => {
   try {
@@ -98,110 +79,19 @@ export const improveScript = async (text: string, targetStyle: string): Promise<
       model: "gemini-2.5-flash",
       contents: [{ parts: [{ text: `
         Act as a professional script editor. Rewrite the following transcript to match a "${targetStyle}" style. 
-        
-        Rules:
-        1. Fix any grammatical errors.
-        2. Improve vocabulary to be more professional or suitable for the requested style.
-        3. Ensure the sentence structure flows naturally for speech.
-        4. Keep the original meaning intact.
-        5. DO NOT translate the text unless the style explicitly requests a specific language (e.g. "English" or "Urdu"). Preserve the original language of the text.
-        6. CRITICAL FOR LIP-SYNC: Attempt to match the syllable count, sentence length, and rhythm of the original text as closely as possible.
-        7. Return ONLY the rewritten text.
-
-        Original Text:
-        "${text}"
+        Rules: Fix grammar, improve vocabulary, ensure natural flow, keep original meaning.
+        Original Text: "${text}"
       ` }] }],
     });
-    
     return response.text?.trim() || text;
   } catch (error) {
-    console.warn("Script improvement failed (Network/API Error). Using original text as fallback.", error);
-    // Fallback to original text so the flow doesn't break
+    console.warn("Script improvement failed.", error);
     return text;
   }
 };
 
 /**
- * Generates a prompt for video generation based on the script.
- */
-export const generateVisualPrompt = async (script: string): Promise<string> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ parts: [{ text: `
-        Analyze the following script and describe a SINGLE, cinematic, high-quality stock video shot that would serve as a perfect background for the entire story.
-        
-        The description should be:
-        1. Visual only (no text about audio).
-        2. Suitable for AI Video Generation (Veo).
-        3. Cinematic, 4k, realistic lighting.
-        4. Abstract enough to loop well, or a specific scene that captures the mood.
-        
-        Script: "${script.substring(0, 1000)}"
-        
-        Return ONLY the prompt description.
-      ` }] }],
-    });
-    return response.text?.trim() || "A cinematic, peaceful background with soft lighting, 4k resolution.";
-  } catch (error) {
-    return "A cinematic, peaceful background with soft lighting, 4k resolution.";
-  }
-}
-
-/**
- * Generates a video using Veo.
- */
-export const generateVeoVideo = async (prompt: string): Promise<string> => {
-  // Check for paid API key selection (Veo requirement)
-  if (typeof window !== 'undefined' && (window as any).aistudio) {
-      const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-      if (!hasKey) {
-          await (window as any).aistudio.openSelectKey();
-          // Create new instance to pick up the key
-          // Note: In a real app we might need to handle the promise resolution carefully
-      }
-  }
-
-  // Re-instantiate to ensure key is active
-  const veoAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-  try {
-    console.log("Starting Veo generation with prompt:", prompt);
-    let operation = await veoAi.models.generateVideos({
-      model: 'veo-3.1-fast-generate-preview',
-      prompt: prompt,
-      config: {
-        numberOfVideos: 1,
-        resolution: '720p',
-        aspectRatio: '16:9'
-      }
-    });
-
-    // Poll for completion
-    while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      // Refresh operation status
-      operation = await veoAi.operations.getVideosOperation({operation: operation});
-    }
-
-    const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!videoUri) throw new Error("No video URI returned");
-
-    // Fetch the actual bytes
-    const response = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
-    const blob = await response.blob();
-    
-    // Convert to Object URL
-    return URL.createObjectURL(blob);
-
-  } catch (error) {
-    console.error("Veo Generation Error:", error);
-    throw error;
-  }
-};
-
-/**
- * Analyzes an audio sample to create a "Cloned" voice profile (Style Matching).
+ * Analyzes an audio sample to create a "Cloned" voice profile.
  */
 export const analyzeVoiceSample = async (base64Audio: string, mimeType: string): Promise<{
   name: string;
@@ -222,26 +112,7 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
       contents: {
         parts: [
           { inlineData: { mimeType, data: base64Audio } },
-          { text: `Analyze this voice sample for a professional high-fidelity AI voice cloning application.
-            
-            1. Identify the Gender (MALE, FEMALE, CHILD).
-            2. Estimate the Age (e.g., Child, Teenager, Young Adult, Middle Aged, Elderly).
-            3. Identify the Accent (e.g., American, British, Indian, Pakistani, Australian, etc.) and be specific about region if possible.
-            4. Identify the Language being spoken.
-            5. Analyze the **Intonation Pattern** (e.g., Rising at end, Flat/Monotone, Melodic, Expressive).
-            6. Analyze the **Speech Rhythm** (e.g., Fast, Slow, Staccato, Flowing, Pausing often).
-            7. Describe the voice's unique tone (e.g., Raspy, Energetic, Soft, Authoritative, Deep, Breathly).
-            8. Write an extremely specific "Acting Prompt" to help an AI mimic this person perfectly. Include instructions on vowel pronunciation, stress patterns, and emotional delivery. 
-               Example: "Act as a middle-aged Pakistani man. Speak with a heavy Urdu accent, emphasizing hard consonants. Use a melodic, storytelling intonation."
-            9. Select the best Base Voice ID to start with from:
-               - 'Fenrir' (Deep/Authoritative Male)
-               - 'Puck' (Standard/Energetic Male)
-               - 'Kore' (Mature/Soft Female)
-               - 'Zephyr' (Young/Lively Female)
-            10. Recommend a pitch shift (in cents, between -200 and +200).
-            
-            Return JSON only.`
-          }
+          { text: `Analyze this voice sample for a high-fidelity AI voice cloning application. Return JSON with gender, age, accent, language, intonation, rhythm, styleDescription, actingPrompt, baseVoice (Fenrir/Puck/Kore/Zephyr), and pitch (-200 to 200).` }
         ]
       },
       config: {
@@ -265,7 +136,6 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
     });
 
     const result = JSON.parse(response.text || "{}");
-    
     return {
       name: `Cloned ${result.styleDescription?.split(' ')[0] || 'Voice'}`,
       description: result.styleDescription || "Custom cloned voice",
@@ -279,10 +149,9 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
       intonation: result.intonation,
       rhythm: result.rhythm
     };
-
   } catch (error) {
     console.error("Voice analysis error:", error);
-    throw new Error("Failed to analyze voice sample. File might be too large or format unsupported.");
+    throw new Error("Failed to analyze voice sample.");
   }
 };
 
@@ -300,15 +169,8 @@ export const generatePodcastScript = async (text: string, pairId: string, langua
 
     const prompt = `Convert the following text into a natural, engaging podcast dialogue script between two speakers: ${s1} and ${s2}.
     ${langInstruction}
-    
-    Format the output strictly as:
-    ${s1}: [Line]
-    ${s2}: [Line]
-    
-    Keep the tone conversational.
-    
-    Original Text/Topic:
-    ${text}`;
+    Format: ${s1}: [Line] ...
+    Original Text: ${text}`;
 
     try {
         const response = await ai.models.generateContent({
@@ -325,28 +187,32 @@ export const generatePodcastScript = async (text: string, pairId: string, langua
 /**
  * Generates a Bedtime Story script from raw text (Story Mode).
  */
-export const generateStoryScript = async (text: string, pairId: string): Promise<string> => {
-    const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[3]; // Default to Father/Son
+export const generateStoryScript = async (text: string, pairId: string, language: 'ENGLISH' | 'URDU'): Promise<string> => {
+    const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[3]; 
     const s1 = pair.speaker1.name; // Parent
     const s2 = pair.speaker2.name; // Child
 
+    const langInstruction = language === 'URDU'
+        ? "Mix English with natural Roman Urdu (e.g. 'Beta, suno...', 'Bohat purani baat hai'). This is a Desi/Pakistani bedtime story context."
+        : "Write in beautiful, soothing English.";
+
     const prompt = `Act as a professional creative writer for Bedtime Stories. 
-    Convert the following raw script/topic into a beautiful, soothing bedtime story interaction between a Father (${s1}) and a Child (${s2}).
+    Convert the following raw topic into a beautiful, soothing bedtime story interaction between a Father (${s1}) and a Child (${s2}).
     
     Role:
     - ${s1} (Father): Tells the story in a soothing, loving, beautiful voice. He explains things gently.
     - ${s2} (Child): Listens, occasionally asks cute questions, or reacts with wonder (or gets sleepy).
     
-    Environment & Language:
-    - Determine if the input text implies a specific culture (e.g. Desi/Pakistani/Indian vs Western).
-    - If cultural context exists, mix in natural Urdu/Hindi terms (Romanized) where appropriate for warmth (e.g. "Beta", "Chanda", "Puttar"), otherwise keep it English.
-    - Add natural reactions.
+    Instructions:
+    1. Determine if the topic is Fiction or Non-Fiction and adapt the tone (Magical vs Educational).
+    2. ${langInstruction}
+    3. Keep the conversation natural and heartwarming.
     
     Format the output strictly as:
     ${s1}: [Line]
     ${s2}: [Line]
     
-    Raw Input:
+    Raw Topic/Script:
     ${text}`;
 
     try {
@@ -372,16 +238,12 @@ export const generateSpeech = async (
 ) => {
   const model = "gemini-2.5-flash-preview-tts";
   
-  // Strict modality config
-  let config: any = {
-    responseModalities: [Modality.AUDIO],
-  };
+  let config: any = { responseModalities: [Modality.AUDIO] };
   let finalPrompt = text;
 
   if (style === SpeakingStyle.PODCAST || style === SpeakingStyle.STORY) {
      const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === voiceOrPairId) || AVAILABLE_PODCAST_PAIRS[0];
      
-     // Configure Multi-speaker
      config.speechConfig = {
         multiSpeakerVoiceConfig: {
             speakerVoiceConfigs: [
@@ -403,7 +265,7 @@ export const generateSpeech = async (
          Context: The Father is telling a brief story to his children at night. 
          
          Voice Directions:
-         - ${pair.speaker1.name} (Father): Must sound extremely soothing, warm, deep, and protective. If the text has Urdu words, pronounce them with a natural native accent. If English, use a soft storytelling tone.
+         - ${pair.speaker1.name} (Father): Must sound extremely soothing, warm, deep, and protective. If the text has Urdu/Hindi words, pronounce them with a natural native accent.
          - ${pair.speaker2.name} (Child): Must sound young, sleepy, curious, and sweet.
          
          Environment: Manage the pacing to be slow and relaxing, suitable for night time.
@@ -415,61 +277,23 @@ export const generateSpeech = async (
      }
 
   } else {
-      // Standard Single Speaker
       let selectedVoice = AVAILABLE_VOICES.find(v => v.id === voiceOrPairId);
-      
-      // If not found in presets, check if it's the custom voice passed in
       if (!selectedVoice && customVoiceData && customVoiceData.id === voiceOrPairId) {
           selectedVoice = customVoiceData;
       }
-      
-      // Fallback
       if (!selectedVoice) selectedVoice = AVAILABLE_VOICES[1];
       
       config.speechConfig = {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: selectedVoice.geminiVoiceName },
-          },
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: selectedVoice.geminiVoiceName } },
       };
 
       if (selectedVoice.isCloned && selectedVoice.stylePrompt) {
-        finalPrompt = `Task: Mimic the voice described below with extreme accuracy.
-        Voice Description: ${selectedVoice.stylePrompt}
-        Instructions: Maintain the exact accent, intonation, and rhythm. Speak naturally and realistically.
-        Text to narrate: "${text}"`;
+        finalPrompt = `Task: Mimic the voice described below. Description: ${selectedVoice.stylePrompt}. Text: "${text}"`;
       } else if (selectedVoice.isUrdu) {
-        // ... (Keep existing Urdu logic, it's already descriptive)
-        if (selectedVoice.id === 'urdu_authority_male') {
-             finalPrompt = `Narrate the following text in Urdu with a bold, authoritative, and professional commercial tone (Pakistani accent). Text: ${text}`;
-        } else if (selectedVoice.id === 'urdu_pro_emotional') {
-             finalPrompt = `Narrate the following text in Urdu (Pakistani accent) with deep natural emotion. Text: ${text}`;
-        } else if (selectedVoice.id === 'urdu_wise_old') {
-             finalPrompt = `Act as an elderly, wise storyteller. Narrate the following text in Urdu (Pakistani accent). Text: ${text}`;
-        } else if (selectedVoice.id === 'urdu_young_soft') {
-             finalPrompt = `Act as a young, emotional man. Narrate the following text in Urdu (Pakistani accent). Text: ${text}`;
-        } else {
-             finalPrompt = `Narrate the following text in Urdu with a natural Pakistani accent: ${text}`;
-        }
+         finalPrompt = `Narrate the following text in Urdu with a natural Pakistani accent: ${text}`;
       } else {
-        // SIMPLIFIED Standard Prompts for Reliability
-        // "Act as..." sometimes causes the model to generate text instead of audio. 
-        // We rely on the input text structure (punctuations) for realism.
-        switch (style) {
-          case SpeakingStyle.FICTION:
-            finalPrompt = `Read this story with deep emotion and dramatic flair: "${text}"`;
-            break;
-          case SpeakingStyle.NON_FICTION:
-            finalPrompt = `Read this text in a clear, professional documentary style: "${text}"`;
-            break;
-          case SpeakingStyle.SINGING:
-            finalPrompt = `Sing this text cheerfully: "${text}"`;
-            break;
-          case SpeakingStyle.STANDARD:
-          default:
-            // Major fix: Send raw text for standard generation to avoid safety blocks/refusals
-            finalPrompt = text;
-            break;
-        }
+        // Simple pass-through for stability
+        finalPrompt = text;
       }
   }
 
@@ -483,14 +307,12 @@ export const generateSpeech = async (
     const candidate = response.candidates?.[0];
     const part = candidate?.content?.parts?.[0];
 
-    // ERROR CHECK: Did the model refuse and return text?
     if (part?.text && !part?.inlineData) {
-        console.warn("Gemini returned text instead of audio (Safety/Refusal):", part.text);
-        throw new Error("The AI model refused to generate audio for this prompt. Please try simpler text or a different style.");
+        throw new Error("AI refused to generate audio. Try simpler text.");
     }
 
-    if (!part || !part.inlineData || !part.inlineData.data) {
-      throw new Error("No audio data returned from Gemini. The request may have timed out or been blocked.");
+    if (!part?.inlineData?.data) {
+      throw new Error("No audio data returned.");
     }
 
     return part.inlineData.data; 
@@ -500,33 +322,87 @@ export const generateSpeech = async (
   }
 };
 
-/**
- * Transcribes a video file to text.
- */
 export const transcribeVideo = async (base64Video: string, mimeType: string) => {
-  const model = "gemini-2.5-flash"; 
-
   try {
     const response = await ai.models.generateContent({
-      model: model,
+      model: "gemini-2.5-flash",
       contents: {
         parts: [
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Video,
-            },
-          },
-          {
-            text: "Please transcribe the speech in this video accurately. Provide only the transcription without intro or outro text.",
-          },
+          { inlineData: { mimeType, data: base64Video } },
+          { text: "Transcribe the speech in this video." },
         ],
       },
     });
-
     return response.text;
   } catch (error) {
     console.error("Error transcribing video:", error);
+    throw error;
+  }
+};
+
+/**
+ * Generates a visual description prompt for video generation based on a script.
+ */
+export const generateVisualPrompt = async (script: string): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ parts: [{ text: `
+        Act as a professional cinematographer. Create a concise, visually rich description for a video generation model (like Veo) based on this story segment.
+        Focus on: Subject appearance, Action, Environment, Lighting, and Mood.
+        Keep it under 300 characters.
+        Story Script: "${script.substring(0, 1000)}"
+      ` }] }],
+    });
+    return response.text?.trim() || "A cinematic scene representing the story.";
+  } catch (error) {
+    console.warn("Visual prompt generation failed.", error);
+    return "A cinematic scene representing the story.";
+  }
+};
+
+/**
+ * Generates a video using Veo model.
+ */
+export const generateVeoVideo = async (prompt: string): Promise<string> => {
+  try {
+    // Create new instance to ensure fresh API key usage for Veo as per guidelines
+    const veoAi = new GoogleGenAI({ apiKey: process.env.API_KEY || '' }); 
+
+    let operation = await veoAi.models.generateVideos({
+      model: 'veo-3.1-fast-generate-preview',
+      prompt: prompt,
+      config: {
+        numberOfVideos: 1,
+        resolution: '720p', 
+        aspectRatio: '16:9'
+      }
+    });
+
+    while (!operation.done) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      operation = await veoAi.operations.getVideosOperation({operation: operation});
+    }
+
+    if (operation.error) {
+       throw new Error(`Video generation failed: ${operation.error.message}`);
+    }
+    
+    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!downloadLink) {
+        throw new Error("No video URI returned.");
+    }
+
+    // Fetch with API key to get the bytes
+    const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    if (!videoResponse.ok) {
+        throw new Error("Failed to download generated video.");
+    }
+    const blob = await videoResponse.blob();
+    return URL.createObjectURL(blob);
+
+  } catch (error) {
+    console.error("Veo generation error:", error);
     throw error;
   }
 };

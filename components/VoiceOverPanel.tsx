@@ -53,18 +53,14 @@ export const VoiceOverPanel: React.FC = () => {
       // 1. Optimize Script if Enabled 
       // (Not in podcast/story mode, as those have their own script generation tools)
       if (isEnhancementEnabled && speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY) {
-         // We quickly optimize the script for better flow/pronunciation
          finalText = await optimizeScriptForSpeech(text);
-         // Update the UI so user sees the improvement
          setText(finalText);
       }
 
       // 2. Generate Audio
-      // If Podcast/Story mode, use selectedPairId, else use selectedVoiceId
       const isMultiSpeaker = speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY;
       const idToUse = isMultiSpeaker ? selectedPairId : selectedVoiceId;
       
-      // Pass custom voice data if using a cloned voice
       const customVoice = clonedVoices.find(v => v.id === selectedVoiceId);
       
       const base64Audio = await generateSpeech(finalText, idToUse, speakingStyle, customVoice);
@@ -107,8 +103,8 @@ export const VoiceOverPanel: React.FC = () => {
       try {
           let script = "";
           if (speakingStyle === SpeakingStyle.STORY) {
-              // Bedtime Story Mode
-              script = await generateStoryScript(text, selectedPairId);
+              // Bedtime Story Mode (Passes Lang for Mixed Urdu support)
+              script = await generateStoryScript(text, selectedPairId, podcastLang);
           } else {
               // Podcast Mode
               script = await generatePodcastScript(text, selectedPairId, podcastLang);
@@ -302,7 +298,6 @@ export const VoiceOverPanel: React.FC = () => {
                     key={style.id}
                     onClick={() => {
                         setSpeakingStyle(style.id);
-                        // Default to a suitable story pair if switching to story mode
                         if (style.id === SpeakingStyle.STORY) {
                             setSelectedPairId('pair_male_boy');
                         }
@@ -325,25 +320,24 @@ export const VoiceOverPanel: React.FC = () => {
               <section className="animate-fade-in">
                 <div className="flex items-center justify-between mb-3">
                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                       {speakingStyle === SpeakingStyle.STORY ? 'Story Family' : 'Podcast Duo'}
+                       {speakingStyle === SpeakingStyle.STORY ? 'Story Family & Language' : 'Podcast Duo & Language'}
                    </h3>
                    
-                   {speakingStyle === SpeakingStyle.PODCAST && (
-                       <div className="flex items-center bg-slate-700 rounded-lg p-0.5">
-                          <button 
-                            onClick={() => setPodcastLang('ENGLISH')}
-                            className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'ENGLISH' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}
-                          >
-                            ENG
-                          </button>
-                          <button 
-                            onClick={() => setPodcastLang('URDU')}
-                            className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'URDU' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                          >
-                            URDU
-                          </button>
-                       </div>
-                   )}
+                   <div className="flex items-center bg-slate-700 rounded-lg p-0.5">
+                      <button 
+                        onClick={() => setPodcastLang('ENGLISH')}
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'ENGLISH' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        ENG
+                      </button>
+                      <button 
+                        onClick={() => setPodcastLang('URDU')}
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'URDU' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        title={speakingStyle === SpeakingStyle.STORY ? "Mix English + Roman Urdu for Desi Stories" : "Urdu Podcast"}
+                      >
+                        URDU
+                      </button>
+                   </div>
                 </div>
                 
                 <div className="space-y-2">
@@ -538,8 +532,8 @@ export const VoiceOverPanel: React.FC = () => {
             }`}
             style={{ direction: currentVoice?.isUrdu || (speakingStyle === SpeakingStyle.PODCAST && podcastLang === 'URDU') ? 'rtl' : 'ltr' }}
             placeholder={
-              speakingStyle === SpeakingStyle.STORY ? "Enter a topic (e.g., 'A story about a brave rabbit') or paste a raw story script here..." :
-              speakingStyle === SpeakingStyle.PODCAST ? `Enter a topic or a script...\n\nExample Format:\n${currentPair?.speaker1.name}: Hello there!\n${currentPair?.speaker2.name}: Hi! How are you?\n\n(Or just click 'Auto-Script' to convert raw text)` :
+              speakingStyle === SpeakingStyle.STORY ? `Enter a story topic (e.g., 'A rabbit who wanted to fly').\n\nClick "Magic Story Writer" to generate a full bilingual dialogue!` :
+              speakingStyle === SpeakingStyle.PODCAST ? `Enter a topic...\n\nExample Format:\n${currentPair?.speaker1.name}: Hello there!\n${currentPair?.speaker2.name}: Hi! How are you?\n\n(Or just click 'Auto-Script' to convert raw text)` :
               speakingStyle === SpeakingStyle.FICTION ? "Once upon a time, in a land far away..." :
               "Enter your text here..."
             }
