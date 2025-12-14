@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Play, Pause, Wand2, Download, Video, Mic2, RefreshCw, Languages, User, Globe, Zap, Settings, Film, Edit3 } from 'lucide-react';
 import { fileToBase64, decodeBase64, decodeAudioData } from '../utils/audioUtils';
-import { transcribeVideo, analyzeVoiceSample, improveScript, generateSpeech } from '../services/geminiService';
+import { transcribeVideo, analyzeVoiceSample, improveScript, generateSpeech, translateScript } from '../services/geminiService';
 import { VoiceOption, SpeakingStyle } from '../types';
 
 export const VideoEnhancerPanel: React.FC = () => {
@@ -20,6 +20,8 @@ export const VideoEnhancerPanel: React.FC = () => {
   const [enhancedScript, setEnhancedScript] = useState<string>('');
   const [voiceProfile, setVoiceProfile] = useState<any | null>(null); // Extended VoiceOption
   const [targetAccent, setTargetAccent] = useState<string>('Standard Professional');
+  const [targetLanguage, setTargetLanguage] = useState<string>('English');
+  const [dubbingMode, setDubbingMode] = useState<'ENHANCE' | 'TRANSLATE'>('ENHANCE');
   const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true);
   
   // Audio Playback
@@ -88,48 +90,56 @@ export const VideoEnhancerPanel: React.FC = () => {
   const handleEnhanceAndGenerate = async () => {
     if (!transcription || !voiceProfile) return;
     setStep(4);
-    setStatusMsg('Enhancing script grammar and style...');
-
+    
     try {
-      // Determine detected language (fallback to English if undefined)
       const detectedLang = voiceProfile.language || "English";
+      let finalText = "";
+      let accentPrompt = "";
 
-      // 1. Improve Script
-      // If targetAccent is "Original", we pass "Natural and Grammatically Correct in [Detected Language]".
-      let scriptStyle = targetAccent;
-      if (targetAccent === 'Original (Preserve)') {
-         scriptStyle = `Natural, Relaxing, and Grammatically Correct in ${detectedLang}`;
+      // 1. Script Processing (Translation or Improvement)
+      if (dubbingMode === 'TRANSLATE') {
+          setStatusMsg(`Translating script to ${targetLanguage} and adapting for lip-sync...`);
+          finalText = await translateScript(transcription, targetLanguage);
+          
+          // Native Action Prompt
+          accentPrompt = `Language: ${targetLanguage}.
+          Task: Speak this ${targetLanguage} text as if it is the speaker's native tongue.
+          Critical: Maintain the original speaker's exact Voice Identity (Age: ${voiceProfile.age}, Tone: ${voiceProfile.description}). 
+          Keep the pitch and emotional delivery exactly like the original sample, even though the language has changed.`;
+
+      } else {
+          setStatusMsg('Enhancing script grammar and style...');
+          // If targetAccent is "Original", we pass "Natural and Grammatically Correct".
+          let scriptStyle = targetAccent;
+          if (targetAccent === 'Original (Preserve)') {
+            scriptStyle = `Natural, Relaxing, and Grammatically Correct in ${detectedLang}`;
+          }
+          finalText = await improveScript(transcription, scriptStyle);
+
+          // Enhance Prompt
+          if (targetAccent === 'Original (Preserve)') {
+            accentPrompt = `Language: ${detectedLang}. 
+            Accent: Perfect ${voiceProfile.accent}. 
+            Intonation: ${voiceProfile.intonation || 'Natural'}. 
+            Rhythm: ${voiceProfile.rhythm || 'Conversational'}.
+            Maintain the speaker's original emotional tone and delivery exactly.`;
+          } else if (targetAccent === 'English (Urdu Accent)') {
+             accentPrompt = `Language: English. Accent: Authentic Urdu/Pakistani. Maintain the speaker's ${voiceProfile.age} voice quality.`;
+          } else {
+            accentPrompt = `Keep the speaker's ${voiceProfile.age} voice quality (pitch/tone) but speak in perfect ${targetAccent}.`;
+          }
       }
-      
-      const improved = await improveScript(transcription, scriptStyle);
-      setEnhancedScript(improved);
-      
+
+      setEnhancedScript(finalText);
       setStatusMsg('Generating high-fidelity cloned audio...');
       
       // 2. Generate Audio (Dub)
-      // Modify the style prompt based on user request logic
-      let accentPrompt = "";
-      
-      if (targetAccent === 'Original (Preserve)') {
-        // Strict instruction to preserve the original traits
-        accentPrompt = `Language: ${detectedLang}. 
-        Accent: Perfect ${voiceProfile.accent}. 
-        Intonation: ${voiceProfile.intonation || 'Natural'}. 
-        Rhythm: ${voiceProfile.rhythm || 'Conversational'}.
-        Maintain the speaker's original emotional tone and delivery exactly.`;
-      } else if (targetAccent === 'English (Urdu Accent)') {
-         accentPrompt = `Language: English. Accent: Authentic Urdu/Pakistani. Maintain the speaker's ${voiceProfile.age} voice quality.`;
-      } else {
-        // Switch accent but keep voice quality
-        accentPrompt = `Keep the speaker's ${voiceProfile.age} voice quality (pitch/tone) but speak in perfect ${targetAccent}.`;
-      }
-      
       const modifiedVoice = {
          ...voiceProfile,
          stylePrompt: `${voiceProfile.stylePrompt}. ${accentPrompt}`
       };
 
-      const base64Audio = await generateSpeech(improved, modifiedVoice.id, SpeakingStyle.STANDARD, modifiedVoice);
+      const base64Audio = await generateSpeech(finalText, modifiedVoice.id, SpeakingStyle.STANDARD, modifiedVoice);
       
       // 3. Decode
       const rawBytes = decodeBase64(base64Audio);
@@ -150,7 +160,6 @@ export const VideoEnhancerPanel: React.FC = () => {
     if (!enhancedScript || !voiceProfile) return;
     setIsRegenerating(true);
     
-    // Stop playback if active
     if (isPlaying && videoRef.current) {
          videoRef.current.pause();
          if(sourceNodeRef.current) { try { sourceNodeRef.current.stop() } catch(e){} }
@@ -161,17 +170,20 @@ export const VideoEnhancerPanel: React.FC = () => {
       const detectedLang = voiceProfile.language || "English";
       let accentPrompt = "";
       
-      // Re-apply accent logic
-      if (targetAccent === 'Original (Preserve)') {
-        accentPrompt = `Language: ${detectedLang}. 
-        Accent: Perfect ${voiceProfile.accent}. 
-        Intonation: ${voiceProfile.intonation || 'Natural'}. 
-        Rhythm: ${voiceProfile.rhythm || 'Conversational'}.
-        Maintain the speaker's original emotional tone and delivery exactly.`;
-      } else if (targetAccent === 'English (Urdu Accent)') {
-         accentPrompt = `Language: English. Accent: Authentic Urdu/Pakistani. Maintain the speaker's ${voiceProfile.age} voice quality.`;
+      // Re-apply logic based on current mode settings
+      if (dubbingMode === 'TRANSLATE') {
+          accentPrompt = `Language: ${targetLanguage}.
+          Task: Speak this ${targetLanguage} text as if it is the speaker's native tongue.
+          Critical: Maintain the original speaker's exact Voice Identity (Age: ${voiceProfile.age}, Tone: ${voiceProfile.description}). 
+          Keep the pitch and emotional delivery exactly like the original sample.`;
       } else {
-        accentPrompt = `Keep the speaker's ${voiceProfile.age} voice quality (pitch/tone) but speak in perfect ${targetAccent}.`;
+          if (targetAccent === 'Original (Preserve)') {
+            accentPrompt = `Language: ${detectedLang}. Accent: Perfect ${voiceProfile.accent}. Intonation: ${voiceProfile.intonation || 'Natural'}. Maintain the speaker's original tone exactly.`;
+          } else if (targetAccent === 'English (Urdu Accent)') {
+             accentPrompt = `Language: English. Accent: Authentic Urdu/Pakistani. Maintain the speaker's ${voiceProfile.age} voice quality.`;
+          } else {
+            accentPrompt = `Keep the speaker's ${voiceProfile.age} voice quality (pitch/tone) but speak in perfect ${targetAccent}.`;
+          }
       }
       
       const modifiedVoice = {
@@ -179,7 +191,6 @@ export const VideoEnhancerPanel: React.FC = () => {
          stylePrompt: `${voiceProfile.stylePrompt}. ${accentPrompt}`
       };
 
-      // Generate with current text
       const base64Audio = await generateSpeech(enhancedScript, modifiedVoice.id, SpeakingStyle.STANDARD, modifiedVoice);
       
       const rawBytes = decodeBase64(base64Audio);
@@ -276,7 +287,7 @@ export const VideoEnhancerPanel: React.FC = () => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'dubbed_video.webm';
+            a.download = `dubbed_video_${dubbingMode.toLowerCase()}.webm`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -301,7 +312,7 @@ export const VideoEnhancerPanel: React.FC = () => {
         }
 
         videoRef.current.currentTime = 0;
-        videoRef.current.muted = true; // Important: Mute the element itself so we don't record the original audio track if it leaks, though we only grabbed video track.
+        videoRef.current.muted = true; 
 
         recorder.start();
         videoRef.current.play();
@@ -319,6 +330,8 @@ export const VideoEnhancerPanel: React.FC = () => {
         setIsRendering(false);
     }
   };
+
+  const LANGUAGES = ['English', 'Urdu', 'Spanish', 'French', 'German', 'Hindi', 'Arabic', 'Chinese', 'Japanese', 'Russian'];
 
   return (
     <div className="h-full flex flex-col gap-6 relative">
@@ -378,78 +391,100 @@ export const VideoEnhancerPanel: React.FC = () => {
             {step === 3 && (
                <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700 space-y-6 animate-fade-in">
                   <div>
-                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Detected Voice Profile</h3>
-                    <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 space-y-3">
+                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Detected Voice</h3>
+                    <div className="bg-slate-900 p-3 rounded-lg border border-slate-700 space-y-2">
                        <div className="flex items-center gap-3">
-                           <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white shrink-0">
-                              <Mic2 size={20} />
+                           <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white shrink-0">
+                              <Mic2 size={16} />
                            </div>
-                           <div>
-                              <div className="text-sm font-bold text-white">{voiceProfile?.name}</div>
-                              <div className="text-xs text-slate-500">{voiceProfile?.description}</div>
+                           <div className="flex-1">
+                              <div className="text-sm font-bold text-white flex justify-between">
+                                  {voiceProfile?.name}
+                                  <span className="text-[10px] bg-slate-700 px-1.5 py-0.5 rounded text-slate-300">{voiceProfile?.gender}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate">{voiceProfile?.description}</div>
                            </div>
-                       </div>
-                       
-                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
-                          <div className="flex items-center gap-2 text-xs text-slate-400">
-                             <User size={12} className="text-indigo-400" />
-                             <span>Age: <span className="text-slate-200">{voiceProfile?.age}</span></span>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-slate-400">
-                             <Globe size={12} className="text-indigo-400" />
-                             <span>Lang: <span className="text-slate-200">{voiceProfile?.language || 'Auto'}</span></span>
-                          </div>
-                       </div>
-                       
-                       {/* Enhanced Details */}
-                       <div className="grid grid-cols-1 gap-1 pt-2 border-t border-slate-800">
-                          <div className="text-[10px] text-slate-400 flex justify-between">
-                            <span>Accent:</span> <span className="text-slate-300">{voiceProfile?.accent}</span>
-                          </div>
-                          <div className="text-[10px] text-slate-400 flex justify-between">
-                            <span>Rhythm:</span> <span className="text-slate-300">{voiceProfile?.rhythm}</span>
-                          </div>
                        </div>
                     </div>
                   </div>
 
-                  <div>
-                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Target Improvement</h3>
-                    <div className="grid grid-cols-1 gap-2">
-                       <button 
-                            onClick={() => setTargetAccent('Original (Preserve)')}
-                            className={`p-3 text-left rounded-lg text-sm border transition-all ${targetAccent === 'Original (Preserve)' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
-                       >
-                            <span className="font-bold">Original (Preserve)</span>
-                            <span className="block text-xs opacity-70">Strictly match accent & intonation</span>
-                       </button>
+                  {/* Mode Selector */}
+                  <div className="flex bg-slate-900 rounded-lg p-1">
+                    <button
+                        onClick={() => setDubbingMode('ENHANCE')}
+                        className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${dubbingMode === 'ENHANCE' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                    >
+                        Enhance Audio
+                    </button>
+                    <button
+                        onClick={() => setDubbingMode('TRANSLATE')}
+                        className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${dubbingMode === 'TRANSLATE' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                    >
+                        Translate & Dub
+                    </button>
+                  </div>
 
-                       {['Standard Professional', 'American Accent', 'British Accent', 'English (Urdu Accent)', 'Urdu (Native)', 'Energetic Promo'].map(style => (
+                  {dubbingMode === 'ENHANCE' ? (
+                      <div>
+                        <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Enhancement Style</h3>
+                        <div className="grid grid-cols-1 gap-2">
                           <button 
-                            key={style}
-                            onClick={() => setTargetAccent(style)}
-                            className={`p-3 text-left rounded-lg text-sm border transition-all ${targetAccent === style ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+                                onClick={() => setTargetAccent('Original (Preserve)')}
+                                className={`p-3 text-left rounded-lg text-sm border transition-all ${targetAccent === 'Original (Preserve)' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
                           >
-                             {style}
+                                <span className="font-bold block">Original (Preserve)</span>
+                                <span className="text-xs opacity-70">Strictly match accent & intonation</span>
                           </button>
-                       ))}
-                    </div>
+
+                          {['Standard Professional', 'American Accent', 'British Accent', 'English (Urdu Accent)'].map(style => (
+                              <button 
+                                key={style}
+                                onClick={() => setTargetAccent(style)}
+                                className={`p-3 text-left rounded-lg text-sm border transition-all ${targetAccent === style ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+                              >
+                                {style}
+                              </button>
+                          ))}
+                        </div>
+                      </div>
+                  ) : (
+                      <div className="animate-fade-in">
+                        <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2">
+                             Target Language <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">Native Action</span>
+                        </h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            {LANGUAGES.map(lang => (
+                                <button
+                                    key={lang}
+                                    onClick={() => setTargetLanguage(lang)}
+                                    className={`p-2 text-center rounded-lg text-sm border transition-all ${targetLanguage === lang ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+                                >
+                                    {lang}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2 italic">
+                            * The AI will translate the content into {targetLanguage} while strictly maintaining the original speaker's emotional tone and voice identity.
+                        </p>
+                      </div>
+                  )}
+
+                  <div className="pt-2 flex gap-2">
+                    <button 
+                        onClick={handleAnalyze} 
+                        className="w-1/3 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl font-medium text-xs"
+                    >
+                        Re-Analyze
+                    </button>
+
+                    <button 
+                        onClick={handleEnhanceAndGenerate}
+                        className="flex-1 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2"
+                    >
+                        <Wand2 size={18} />
+                        {dubbingMode === 'ENHANCE' ? 'Enhance Voice' : 'Translate & Dub'}
+                    </button>
                   </div>
-
-                  <button 
-                    onClick={handleAnalyze} 
-                    className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl font-medium text-sm"
-                  >
-                     Re-Analyze Video
-                  </button>
-
-                  <button 
-                    onClick={handleEnhanceAndGenerate}
-                    className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2"
-                  >
-                     <Wand2 size={18} />
-                     Generate Enhanced Dub
-                  </button>
                </div>
             )}
 
@@ -466,8 +501,10 @@ export const VideoEnhancerPanel: React.FC = () => {
                      <div className="w-12 h-12 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-2">
                         <Wand2 size={24} />
                      </div>
-                     <h3 className="text-lg font-bold text-white">Enhancement Complete!</h3>
-                     <p className="text-sm text-slate-400">Audio improved and dubbed.</p>
+                     <h3 className="text-lg font-bold text-white">Processing Complete!</h3>
+                     <p className="text-sm text-slate-400">
+                        {dubbingMode === 'TRANSLATE' ? `Translated to ${targetLanguage}` : 'Voice Enhanced'}
+                     </p>
                   </div>
 
                   {/* Smart Sync Toggle */}
@@ -556,7 +593,7 @@ export const VideoEnhancerPanel: React.FC = () => {
                   <div className="flex justify-between items-center px-4 py-2 bg-slate-900/50 border-b border-slate-800">
                      <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
                         <Edit3 size={12} />
-                        Enhanced Script (Editable)
+                        {dubbingMode === 'TRANSLATE' ? 'Translated Script' : 'Enhanced Script'}
                      </h4>
                      <span className="text-[10px] text-slate-500">Edit text & press Regenerate button</span>
                   </div>

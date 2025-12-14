@@ -31,6 +31,35 @@ export const translateToUrdu = async (text: string): Promise<string> => {
 };
 
 /**
+ * Translates script for Video Dubbing/Translation.
+ * Focuses on natural flow and retaining meaning.
+ */
+export const translateScript = async (text: string, targetLanguage: string): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ parts: [{ text: `
+        Act as a professional dubbing translator. Translate the following video transcript into "${targetLanguage}".
+        
+        Rules:
+        1. The translation must be natural and colloquial for a native speaker of ${targetLanguage}.
+        2. CRITICAL: Try to match the approximate length and rhythm of the original sentences to help with lip-syncing.
+        3. Maintain the original emotional tone (whether it's serious, funny, energetic, etc.).
+        4. Do not include notes, only return the translated text.
+
+        Original Text:
+        "${text}"
+      ` }] }],
+    });
+    
+    return response.text?.trim() || text;
+  } catch (error) {
+    console.warn("Translation failed (Network/API Error). Using original text.", error);
+    return text;
+  }
+};
+
+/**
  * Improves the script for a specific accent/style.
  * Includes fallback to original text on error.
  */
