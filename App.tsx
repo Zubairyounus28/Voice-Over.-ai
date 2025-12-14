@@ -5,8 +5,7 @@ import { VoiceOverPanel } from './components/VoiceOverPanel';
 import { VideoToTextPanel } from './components/VideoToTextPanel';
 import { VideoEnhancerPanel } from './components/VideoEnhancerPanel';
 import { ScriptToVideoPanel } from './components/ScriptToVideoPanel';
-import { AIStoryPanel } from './components/AIStoryPanel';
-import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap, Clapperboard } from 'lucide-react';
+import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap } from 'lucide-react';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(AppMode.VOICE_OVER);
@@ -80,17 +79,6 @@ const App: React.FC = () => {
                 Smart Lip-Sync
                 </button>
                 <button
-                onClick={() => setMode(AppMode.AI_STORY_CREATOR)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-                    mode === AppMode.AI_STORY_CREATOR
-                    ? 'bg-slate-800 text-white shadow-sm ring-1 ring-indigo-500/50'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-                >
-                <Clapperboard size={16} className="text-green-400" />
-                AI Video Creator
-                </button>
-                <button
                 onClick={() => setMode(AppMode.VIDEO_TO_TEXT)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     mode === AppMode.VIDEO_TO_TEXT
@@ -128,10 +116,6 @@ const App: React.FC = () => {
                 onClick={() => setMode(AppMode.SCRIPT_TO_VIDEO)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.SCRIPT_TO_VIDEO ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
             >Smart Lip-Sync</button>
-            <button
-                onClick={() => setMode(AppMode.AI_STORY_CREATOR)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.AI_STORY_CREATOR ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
-            >AI Video Creator</button>
              <button
                 onClick={() => setMode(AppMode.VIDEO_TO_TEXT)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_TO_TEXT ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
@@ -170,16 +154,6 @@ const App: React.FC = () => {
                 </p>
               </div>
               <ScriptToVideoPanel />
-            </div>
-          ) : mode === AppMode.AI_STORY_CREATOR ? (
-            <div className="space-y-4">
-              <div className="mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2">AI Video Creator</h2>
-                <p className="text-slate-400 max-w-2xl">
-                   Create complete videos from scratch. Enter a script, select your native language and voice (Kids, Men, Women), and the AI will generate both the visuals (Veo) and the voiceover.
-                </p>
-              </div>
-              <AIStoryPanel />
             </div>
           ) : (
             <div className="space-y-4">

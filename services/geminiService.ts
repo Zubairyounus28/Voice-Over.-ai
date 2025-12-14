@@ -31,6 +31,35 @@ export const translateToUrdu = async (text: string): Promise<string> => {
 };
 
 /**
+ * Optimizes script for TTS performance (Better flow, punctuation, pronunciation hints).
+ */
+export const optimizeScriptForSpeech = async (text: string): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ parts: [{ text: `
+        Act as a professional Voice Director. Rewrite the following script to be optimized for Text-to-Speech generation.
+        
+        Objectives:
+        1. Fix any grammatical errors or awkward phrasing.
+        2. Insert punctuation (commas, ellipses, periods) to create natural "breathing" pauses and rhythm.
+        3. Break run-on sentences into shorter, punchier lines where appropriate for impact.
+        4. Ensure the tone is natural and conversational (unless it looks strictly formal).
+        5. Return ONLY the enhanced text. Do not add intro/outro notes.
+
+        Original Script:
+        "${text}"
+      ` }] }],
+    });
+    
+    return response.text?.trim() || text;
+  } catch (error) {
+    console.warn("Script optimization failed. Using original text.", error);
+    return text;
+  }
+};
+
+/**
  * Translates script for Video Dubbing/Translation.
  * Focuses on natural flow and retaining meaning.
  */
@@ -350,43 +379,39 @@ export const generateSpeech = async (
       };
 
       if (selectedVoice.isCloned && selectedVoice.stylePrompt) {
-        // Use the cloned style prompt
-        // Enhanced Instruction: Explicitly ask for realism
         finalPrompt = `Task: Mimic the voice described below with extreme accuracy.
         Voice Description: ${selectedVoice.stylePrompt}
-        
-        Instructions:
-        1. Maintain the exact accent, intonation, and rhythm described.
-        2. If the accent is non-native English (e.g. Urdu accent), ensure the pronunciation reflects that region's phonetic habits (e.g. vowel sounds, consonant stress).
-        3. Speak naturally and realistically.
-        
+        Instructions: Maintain the exact accent, intonation, and rhythm. Speak naturally and realistically.
         Text to narrate: "${text}"`;
       } else if (selectedVoice.isUrdu) {
+        // ... (Keep existing Urdu logic, it's already descriptive)
         if (selectedVoice.id === 'urdu_authority_male') {
              finalPrompt = `Narrate the following text in Urdu with a bold, authoritative, and professional commercial tone (Pakistani accent). The delivery should be strong, impactful, and suitable for a high-energy advertisement. Text: ${text}`;
         } else if (selectedVoice.id === 'urdu_pro_emotional') {
-             finalPrompt = `Narrate the following text in Urdu (Pakistani accent) with deep natural emotion and professionalism. The tone should be warm, trustworthy, and sophisticated, like a high-quality brand ambassador or Dr. Saifuddin style. Use expressive intonation and natural pacing. Text: ${text}`;
+             finalPrompt = `Narrate the following text in Urdu (Pakistani accent) with deep natural emotion and professionalism. The tone should be warm, trustworthy, and sophisticated. Use expressive intonation and natural pacing. Text: ${text}`;
         } else if (selectedVoice.id === 'urdu_wise_old') {
-             finalPrompt = `Act as an elderly, wise storyteller. Narrate the following text in Urdu (Pakistani accent) with a relaxed, emotional, and deep tone. The voice should sound experienced, calm, and heartfelt. Text: ${text}`;
+             finalPrompt = `Act as an elderly, wise storyteller. Narrate the following text in Urdu (Pakistani accent) with a relaxed, emotional, and deep tone. Text: ${text}`;
         } else if (selectedVoice.id === 'urdu_young_soft') {
-             finalPrompt = `Act as a young, emotional man. Narrate the following text in Urdu (Pakistani accent) with a soft, relaxed, and heartfelt tone. The delivery should be gentle, calm, and touching. Text: ${text}`;
+             finalPrompt = `Act as a young, emotional man. Narrate the following text in Urdu (Pakistani accent) with a soft, relaxed, and heartfelt tone. Text: ${text}`;
         } else {
              finalPrompt = `Narrate the following text in Urdu with a natural Pakistani accent: ${text}`;
         }
       } else {
+        // Enhanced Standard Prompts for Realism
         switch (style) {
           case SpeakingStyle.FICTION:
-            finalPrompt = `Read the following story with deep emotion, character expression, and dramatic flair suitable for an audiobook: ${text}`;
+            finalPrompt = `Act as a professional audiobook narrator. Read the following story with deep emotion, character voices, and dramatic pacing to captivate the listener. Text: "${text}"`;
             break;
           case SpeakingStyle.NON_FICTION:
-            finalPrompt = `Narrate the following text in a clear, professional, and factual documentary style: ${text}`;
+            finalPrompt = `Act as a professional documentary narrator. Read the following text in a clear, engaging, and authoritative factual style. Use natural pauses. Text: "${text}"`;
             break;
           case SpeakingStyle.SINGING:
-            finalPrompt = `Sing this cheerfully: ${text}`;
+            finalPrompt = `Sing this text cheerfully and melodically: "${text}"`;
             break;
           case SpeakingStyle.STANDARD:
           default:
-            finalPrompt = text;
+            // Major improvement for "Realistic" request
+            finalPrompt = `Act as a natural, engaging speaker. Read this text with realistic intonation, breathing pauses, and appropriate emotional inflection based on the context. Do not sound robotic. Text: "${text}"`;
             break;
         }
       }

@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint } from 'lucide-react';
+import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint, CheckCircle2 } from 'lucide-react';
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, VoiceOption, PodcastPair, VoiceGender, SpeakingStyle } from '../types';
-import { generateSpeech, translateToUrdu, generatePodcastScript, analyzeVoiceSample } from '../services/geminiService';
+import { generateSpeech, translateToUrdu, generatePodcastScript, analyzeVoiceSample, optimizeScriptForSpeech } from '../services/geminiService';
 import { decodeBase64, decodeAudioData, audioBufferToWav, fileToBase64 } from '../utils/audioUtils';
 
 export const VoiceOverPanel: React.FC = () => {
@@ -12,6 +12,7 @@ export const VoiceOverPanel: React.FC = () => {
   const [pitch, setPitch] = useState<number>(0); // detune in cents
   const [speakingStyle, setSpeakingStyle] = useState<SpeakingStyle>(SpeakingStyle.STANDARD);
   const [podcastLang, setPodcastLang] = useState<'ENGLISH' | 'URDU'>('ENGLISH');
+  const [isEnhancementEnabled, setIsEnhancementEnabled] = useState<boolean>(true); // Default to true for better results
   
   // Custom Voice State
   const [clonedVoices, setClonedVoices] = useState<VoiceOption[]>([]);
@@ -47,13 +48,24 @@ export const VoiceOverPanel: React.FC = () => {
     stopAudio(); 
 
     try {
+      let finalText = text;
+
+      // 1. Optimize Script if Enabled (and not in podcast mode, as podcast generation handles its own script)
+      if (isEnhancementEnabled && speakingStyle !== SpeakingStyle.PODCAST) {
+         // We quickly optimize the script for better flow/pronunciation
+         finalText = await optimizeScriptForSpeech(text);
+         // Update the UI so user sees the improvement
+         setText(finalText);
+      }
+
+      // 2. Generate Audio
       // If Podcast mode, use selectedPairId, else use selectedVoiceId
       const idToUse = speakingStyle === SpeakingStyle.PODCAST ? selectedPairId : selectedVoiceId;
       
       // Pass custom voice data if using a cloned voice
       const customVoice = clonedVoices.find(v => v.id === selectedVoiceId);
       
-      const base64Audio = await generateSpeech(text, idToUse, speakingStyle, customVoice);
+      const base64Audio = await generateSpeech(finalText, idToUse, speakingStyle, customVoice);
       const rawBytes = decodeBase64(base64Audio);
       
       if (audioContextRef.current) {
@@ -441,6 +453,20 @@ export const VoiceOverPanel: React.FC = () => {
             </label>
             
             <div className="flex gap-2">
+               {/* Auto-Polish Toggle */}
+               <button 
+                  onClick={() => setIsEnhancementEnabled(!isEnhancementEnabled)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                      isEnhancementEnabled 
+                      ? 'bg-green-600/20 border-green-500/50 text-green-300' 
+                      : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600'
+                  }`}
+                  title="Automatically improves grammar, punctuation, and flow before generating audio."
+               >
+                  <CheckCircle2 size={14} className={isEnhancementEnabled ? 'text-green-400' : 'text-slate-500'} />
+                  Auto-Improve Script
+               </button>
+
               {speakingStyle === SpeakingStyle.PODCAST && (
                   <button 
                   onClick={handleGenerateScript}
@@ -502,7 +528,7 @@ export const VoiceOverPanel: React.FC = () => {
                {isLoading ? (
                  <>
                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                   <span>Generating Audio...</span>
+                   <span>{isEnhancementEnabled ? 'Enhancing & Generating...' : 'Generating Audio...'}</span>
                  </>
                ) : (
                  <>
