@@ -386,32 +386,34 @@ export const generateSpeech = async (
       } else if (selectedVoice.isUrdu) {
         // ... (Keep existing Urdu logic, it's already descriptive)
         if (selectedVoice.id === 'urdu_authority_male') {
-             finalPrompt = `Narrate the following text in Urdu with a bold, authoritative, and professional commercial tone (Pakistani accent). The delivery should be strong, impactful, and suitable for a high-energy advertisement. Text: ${text}`;
+             finalPrompt = `Narrate the following text in Urdu with a bold, authoritative, and professional commercial tone (Pakistani accent). Text: ${text}`;
         } else if (selectedVoice.id === 'urdu_pro_emotional') {
-             finalPrompt = `Narrate the following text in Urdu (Pakistani accent) with deep natural emotion and professionalism. The tone should be warm, trustworthy, and sophisticated. Use expressive intonation and natural pacing. Text: ${text}`;
+             finalPrompt = `Narrate the following text in Urdu (Pakistani accent) with deep natural emotion. Text: ${text}`;
         } else if (selectedVoice.id === 'urdu_wise_old') {
-             finalPrompt = `Act as an elderly, wise storyteller. Narrate the following text in Urdu (Pakistani accent) with a relaxed, emotional, and deep tone. Text: ${text}`;
+             finalPrompt = `Act as an elderly, wise storyteller. Narrate the following text in Urdu (Pakistani accent). Text: ${text}`;
         } else if (selectedVoice.id === 'urdu_young_soft') {
-             finalPrompt = `Act as a young, emotional man. Narrate the following text in Urdu (Pakistani accent) with a soft, relaxed, and heartfelt tone. Text: ${text}`;
+             finalPrompt = `Act as a young, emotional man. Narrate the following text in Urdu (Pakistani accent). Text: ${text}`;
         } else {
              finalPrompt = `Narrate the following text in Urdu with a natural Pakistani accent: ${text}`;
         }
       } else {
-        // Enhanced Standard Prompts for Realism
+        // SIMPLIFIED Standard Prompts for Reliability
+        // "Act as..." sometimes causes the model to generate text instead of audio. 
+        // We rely on the input text structure (punctuations) for realism.
         switch (style) {
           case SpeakingStyle.FICTION:
-            finalPrompt = `Act as a professional audiobook narrator. Read the following story with deep emotion, character voices, and dramatic pacing to captivate the listener. Text: "${text}"`;
+            finalPrompt = `Read this story with deep emotion and dramatic flair: "${text}"`;
             break;
           case SpeakingStyle.NON_FICTION:
-            finalPrompt = `Act as a professional documentary narrator. Read the following text in a clear, engaging, and authoritative factual style. Use natural pauses. Text: "${text}"`;
+            finalPrompt = `Read this text in a clear, professional documentary style: "${text}"`;
             break;
           case SpeakingStyle.SINGING:
-            finalPrompt = `Sing this text cheerfully and melodically: "${text}"`;
+            finalPrompt = `Sing this text cheerfully: "${text}"`;
             break;
           case SpeakingStyle.STANDARD:
           default:
-            // Major improvement for "Realistic" request
-            finalPrompt = `Act as a natural, engaging speaker. Read this text with realistic intonation, breathing pauses, and appropriate emotional inflection based on the context. Do not sound robotic. Text: "${text}"`;
+            // Major fix: Send raw text for standard generation to avoid safety blocks/refusals
+            finalPrompt = text;
             break;
         }
       }
