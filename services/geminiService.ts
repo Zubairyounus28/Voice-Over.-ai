@@ -265,10 +265,10 @@ export const generateSpeech = async (
          Context: The Father is telling a brief story to his children at night. 
          
          Voice Directions:
-         - ${pair.speaker1.name} (Father): Must sound extremely soothing, warm, deep, and protective. If the text has Urdu/Hindi words, pronounce them with a natural native accent.
-         - ${pair.speaker2.name} (Child): Must sound young, sleepy, curious, and sweet.
+         - ${pair.speaker1.name} (Father): Must sound extremely DEEP, SLOW, warm, and protective. 
+         - ${pair.speaker2.name} (Child): Must sound like a LITTLE KID (5 years old). High pitch, energetic, cute, and curious.
          
-         Environment: Manage the pacing to be slow and relaxing, suitable for night time.
+         Environment: Quiet, cozy night time.
          
          Dialogue to Narrate:
          ${text}`;

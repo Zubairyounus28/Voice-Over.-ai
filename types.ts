@@ -93,7 +93,7 @@ export const AVAILABLE_PODCAST_PAIRS: PodcastPair[] = [
     name: 'Father & Son',
     description: 'Bedtime Story Mode',
     speaker1: { name: 'Dad', voiceName: 'Fenrir', label: 'Father' },
-    speaker2: { name: 'Timmy', voiceName: 'Puck', label: 'Son' }
+    speaker2: { name: 'Timmy', voiceName: 'Zephyr', label: 'Son' }
   },
   {
     id: 'pair_father_daughter',
