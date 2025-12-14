@@ -11,6 +11,7 @@ export enum SpeakingStyle {
   NON_FICTION = 'NON_FICTION',
   SINGING = 'SINGING',
   PODCAST = 'PODCAST',
+  STORY = 'STORY',
 }
 
 export enum AppMode {
@@ -91,30 +92,30 @@ export const AVAILABLE_PODCAST_PAIRS: PodcastPair[] = [
   {
     id: 'pair_male_boy',
     name: 'Father & Son',
-    description: 'Man & Young Boy',
+    description: 'Bedtime Story Mode',
     speaker1: { name: 'Dad', voiceName: 'Fenrir', label: 'Father' },
     speaker2: { name: 'Timmy', voiceName: 'Puck', label: 'Son' }
   },
   {
-    id: 'pair_female_girl',
-    name: 'Mother & Daughter',
-    description: 'Woman & Young Girl',
-    speaker1: { name: 'Mom', voiceName: 'Kore', label: 'Mother' },
-    speaker2: { name: 'Lily', voiceName: 'Zephyr', label: 'Daughter' }
-  },
-  {
     id: 'pair_father_daughter',
     name: 'Father & Daughter',
-    description: 'Man & Young Girl',
+    description: 'Bedtime Story Mode',
     speaker1: { name: 'Dad', voiceName: 'Fenrir', label: 'Father' },
     speaker2: { name: 'Lily', voiceName: 'Zephyr', label: 'Daughter' }
   },
   {
     id: 'pair_mother_son',
     name: 'Mother & Son',
-    description: 'Woman & Young Boy',
+    description: 'Bedtime Story Mode',
     speaker1: { name: 'Mom', voiceName: 'Kore', label: 'Mother' },
     speaker2: { name: 'Timmy', voiceName: 'Puck', label: 'Son' }
+  },
+  {
+    id: 'pair_female_girl',
+    name: 'Mother & Daughter',
+    description: 'Bedtime Story Mode',
+    speaker1: { name: 'Mom', voiceName: 'Kore', label: 'Mother' },
+    speaker2: { name: 'Lily', voiceName: 'Zephyr', label: 'Daughter' }
   }
 ];
 

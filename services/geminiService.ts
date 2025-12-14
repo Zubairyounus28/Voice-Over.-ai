@@ -323,6 +323,45 @@ export const generatePodcastScript = async (text: string, pairId: string, langua
 };
 
 /**
+ * Generates a Bedtime Story script from raw text (Story Mode).
+ */
+export const generateStoryScript = async (text: string, pairId: string): Promise<string> => {
+    const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[3]; // Default to Father/Son
+    const s1 = pair.speaker1.name; // Parent
+    const s2 = pair.speaker2.name; // Child
+
+    const prompt = `Act as a professional creative writer for Bedtime Stories. 
+    Convert the following raw script/topic into a beautiful, soothing bedtime story interaction between a Father (${s1}) and a Child (${s2}).
+    
+    Role:
+    - ${s1} (Father): Tells the story in a soothing, loving, beautiful voice. He explains things gently.
+    - ${s2} (Child): Listens, occasionally asks cute questions, or reacts with wonder (or gets sleepy).
+    
+    Environment & Language:
+    - Determine if the input text implies a specific culture (e.g. Desi/Pakistani/Indian vs Western).
+    - If cultural context exists, mix in natural Urdu/Hindi terms (Romanized) where appropriate for warmth (e.g. "Beta", "Chanda", "Puttar"), otherwise keep it English.
+    - Add natural reactions.
+    
+    Format the output strictly as:
+    ${s1}: [Line]
+    ${s2}: [Line]
+    
+    Raw Input:
+    ${text}`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: [{ parts: [{ text: prompt }] }],
+        });
+        return response.text?.trim() || "";
+    } catch (error) {
+        console.error("Story script generation error:", error);
+        throw error;
+    }
+};
+
+/**
  * Generates speech from text using the specified voice/pair and style.
  */
 export const generateSpeech = async (
@@ -339,7 +378,7 @@ export const generateSpeech = async (
   };
   let finalPrompt = text;
 
-  if (style === SpeakingStyle.PODCAST) {
+  if (style === SpeakingStyle.PODCAST || style === SpeakingStyle.STORY) {
      const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === voiceOrPairId) || AVAILABLE_PODCAST_PAIRS[0];
      
      // Configure Multi-speaker
@@ -358,7 +397,22 @@ export const generateSpeech = async (
         }
      };
 
-     finalPrompt = `TTS the following conversation between ${pair.speaker1.name} and ${pair.speaker2.name}.\n\n${text}`;
+     if (style === SpeakingStyle.STORY) {
+         finalPrompt = `Task: Generate a heartwarming Bedtime Story interaction between a Father (${pair.speaker1.name}) and a Child (${pair.speaker2.name}).
+         
+         Context: The Father is telling a brief story to his children at night. 
+         
+         Voice Directions:
+         - ${pair.speaker1.name} (Father): Must sound extremely soothing, warm, deep, and protective. If the text has Urdu words, pronounce them with a natural native accent. If English, use a soft storytelling tone.
+         - ${pair.speaker2.name} (Child): Must sound young, sleepy, curious, and sweet.
+         
+         Environment: Manage the pacing to be slow and relaxing, suitable for night time.
+         
+         Dialogue to Narrate:
+         ${text}`;
+     } else {
+         finalPrompt = `TTS the following conversation between ${pair.speaker1.name} and ${pair.speaker2.name}.\n\n${text}`;
+     }
 
   } else {
       // Standard Single Speaker

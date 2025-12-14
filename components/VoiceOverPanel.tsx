@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint, CheckCircle2 } from 'lucide-react';
+import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint, CheckCircle2, MoonStar } from 'lucide-react';
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, VoiceOption, PodcastPair, VoiceGender, SpeakingStyle } from '../types';
-import { generateSpeech, translateToUrdu, generatePodcastScript, analyzeVoiceSample, optimizeScriptForSpeech } from '../services/geminiService';
+import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, analyzeVoiceSample, optimizeScriptForSpeech } from '../services/geminiService';
 import { decodeBase64, decodeAudioData, audioBufferToWav, fileToBase64 } from '../utils/audioUtils';
 
 export const VoiceOverPanel: React.FC = () => {
@@ -50,8 +50,9 @@ export const VoiceOverPanel: React.FC = () => {
     try {
       let finalText = text;
 
-      // 1. Optimize Script if Enabled (and not in podcast mode, as podcast generation handles its own script)
-      if (isEnhancementEnabled && speakingStyle !== SpeakingStyle.PODCAST) {
+      // 1. Optimize Script if Enabled 
+      // (Not in podcast/story mode, as those have their own script generation tools)
+      if (isEnhancementEnabled && speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY) {
          // We quickly optimize the script for better flow/pronunciation
          finalText = await optimizeScriptForSpeech(text);
          // Update the UI so user sees the improvement
@@ -59,8 +60,9 @@ export const VoiceOverPanel: React.FC = () => {
       }
 
       // 2. Generate Audio
-      // If Podcast mode, use selectedPairId, else use selectedVoiceId
-      const idToUse = speakingStyle === SpeakingStyle.PODCAST ? selectedPairId : selectedVoiceId;
+      // If Podcast/Story mode, use selectedPairId, else use selectedVoiceId
+      const isMultiSpeaker = speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY;
+      const idToUse = isMultiSpeaker ? selectedPairId : selectedVoiceId;
       
       // Pass custom voice data if using a cloned voice
       const customVoice = clonedVoices.find(v => v.id === selectedVoiceId);
@@ -86,7 +88,7 @@ export const VoiceOverPanel: React.FC = () => {
       const translatedText = await translateToUrdu(text);
       setText(translatedText);
       // Automatically switch to Urdu voice if regular mode
-      if (speakingStyle !== SpeakingStyle.PODCAST) {
+      if (speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY) {
         const urduVoice = AVAILABLE_VOICES.find(v => v.isUrdu);
         if (urduVoice && selectedVoiceId !== urduVoice.id) {
           handleVoiceSelect(urduVoice);
@@ -103,7 +105,14 @@ export const VoiceOverPanel: React.FC = () => {
       if (!text.trim()) return;
       setIsProcessingScript(true);
       try {
-          const script = await generatePodcastScript(text, selectedPairId, podcastLang);
+          let script = "";
+          if (speakingStyle === SpeakingStyle.STORY) {
+              // Bedtime Story Mode
+              script = await generateStoryScript(text, selectedPairId);
+          } else {
+              // Podcast Mode
+              script = await generatePodcastScript(text, selectedPairId, podcastLang);
+          }
           setText(script);
       } catch (error) {
           alert("Failed to create script.");
@@ -164,8 +173,8 @@ export const VoiceOverPanel: React.FC = () => {
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBuffer;
     
-    // Disable pitch shifting for Podcast mode as it's multi-speaker mixed
-    if (speakingStyle !== SpeakingStyle.PODCAST) {
+    // Disable pitch shifting for Podcast/Story mode as it's multi-speaker mixed
+    if (speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY) {
         source.detune.value = pitch; 
     }
 
@@ -198,8 +207,9 @@ export const VoiceOverPanel: React.FC = () => {
   const handleDownload = () => {
     if (!audioBuffer) return;
     
-    // For Podcast or zero pitch, direct download. For modified pitch, render offline.
-    if (pitch === 0 || speakingStyle === SpeakingStyle.PODCAST) {
+    // For Podcast/Story or zero pitch, direct download. For modified pitch, render offline.
+    const isMulti = speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY;
+    if (pitch === 0 || isMulti) {
       const wavBlob = audioBufferToWav(audioBuffer);
       downloadBlob(wavBlob, 'voice-over.wav');
     } else {
@@ -249,6 +259,15 @@ export const VoiceOverPanel: React.FC = () => {
   const currentVoice = allVoices.find(v => v.id === selectedVoiceId);
   const currentPair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === selectedPairId);
 
+  // Filter pairs for Story mode (Look for Parent/Child descriptions or names)
+  const filteredPairs = speakingStyle === SpeakingStyle.STORY 
+      ? AVAILABLE_PODCAST_PAIRS.filter(p => 
+          p.description.includes("Story") || 
+          p.speaker1.name === "Dad" || 
+          p.speaker1.name === "Mom"
+        )
+      : AVAILABLE_PODCAST_PAIRS;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-140px)] min-h-[600px]">
       
@@ -265,22 +284,29 @@ export const VoiceOverPanel: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-4 space-y-8 custom-scrollbar">
             
             {/* Style Selection */}
-            <section className={currentVoice?.isUrdu && speakingStyle !== SpeakingStyle.PODCAST ? 'opacity-50 pointer-events-none grayscale' : ''}>
+            <section className={currentVoice?.isUrdu && speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY ? 'opacity-50 pointer-events-none grayscale' : ''}>
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 flex justify-between">
                 <span>Speaking Style</span>
-                {currentVoice?.isUrdu && speakingStyle !== SpeakingStyle.PODCAST && <span className="text-[10px] text-amber-500">Auto-set for Urdu</span>}
+                {currentVoice?.isUrdu && speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY && <span className="text-[10px] text-amber-500">Auto-set for Urdu</span>}
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { id: SpeakingStyle.STANDARD, label: 'Standard', icon: MessageSquare },
                   { id: SpeakingStyle.FICTION, label: 'Fiction', icon: BookOpen },
+                  { id: SpeakingStyle.STORY, label: 'Bedtime Story', icon: MoonStar },
+                  { id: SpeakingStyle.PODCAST, label: 'Podcast', icon: Users },
                   { id: SpeakingStyle.NON_FICTION, label: 'Docu', icon: Newspaper },
                   { id: SpeakingStyle.SINGING, label: 'Singing', icon: Music },
-                  { id: SpeakingStyle.PODCAST, label: 'Podcast', icon: Users },
                 ].map((style) => (
                   <button
                     key={style.id}
-                    onClick={() => setSpeakingStyle(style.id)}
+                    onClick={() => {
+                        setSpeakingStyle(style.id);
+                        // Default to a suitable story pair if switching to story mode
+                        if (style.id === SpeakingStyle.STORY) {
+                            setSelectedPairId('pair_male_boy');
+                        }
+                    }}
                     className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
                       speakingStyle === style.id
                         ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-500/20'
@@ -294,29 +320,34 @@ export const VoiceOverPanel: React.FC = () => {
               </div>
             </section>
 
-            {speakingStyle === SpeakingStyle.PODCAST ? (
-              /* PODCAST SETTINGS */
+            {speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY ? (
+              /* PODCAST/STORY SETTINGS */
               <section className="animate-fade-in">
                 <div className="flex items-center justify-between mb-3">
-                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Podcast Duo</h3>
-                   <div className="flex items-center bg-slate-700 rounded-lg p-0.5">
-                      <button 
-                        onClick={() => setPodcastLang('ENGLISH')}
-                        className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'ENGLISH' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}
-                      >
-                        ENG
-                      </button>
-                      <button 
-                        onClick={() => setPodcastLang('URDU')}
-                        className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'URDU' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                      >
-                        URDU
-                      </button>
-                   </div>
+                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                       {speakingStyle === SpeakingStyle.STORY ? 'Story Family' : 'Podcast Duo'}
+                   </h3>
+                   
+                   {speakingStyle === SpeakingStyle.PODCAST && (
+                       <div className="flex items-center bg-slate-700 rounded-lg p-0.5">
+                          <button 
+                            onClick={() => setPodcastLang('ENGLISH')}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'ENGLISH' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}
+                          >
+                            ENG
+                          </button>
+                          <button 
+                            onClick={() => setPodcastLang('URDU')}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'URDU' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                          >
+                            URDU
+                          </button>
+                       </div>
+                   )}
                 </div>
                 
                 <div className="space-y-2">
-                   {AVAILABLE_PODCAST_PAIRS.map(pair => (
+                   {filteredPairs.map(pair => (
                      <button
                         key={pair.id}
                         onClick={() => setSelectedPairId(pair.id)}
@@ -467,7 +498,7 @@ export const VoiceOverPanel: React.FC = () => {
                   Auto-Improve Script
                </button>
 
-              {speakingStyle === SpeakingStyle.PODCAST && (
+              {(speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY) && (
                   <button 
                   onClick={handleGenerateScript}
                   disabled={isProcessingScript || !text}
@@ -478,15 +509,15 @@ export const VoiceOverPanel: React.FC = () => {
                   ) : (
                     <Sparkles size={14} />
                   )}
-                  Auto-Script
+                  {speakingStyle === SpeakingStyle.STORY ? 'Magic Story Writer' : 'Auto-Script'}
                 </button>
               )}
               
               <button 
                 onClick={handleTranslate}
-                disabled={isTranslating || !text || speakingStyle === SpeakingStyle.PODCAST}
+                disabled={isTranslating || !text || speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                    speakingStyle === SpeakingStyle.PODCAST 
+                    speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY
                     ? 'opacity-0 pointer-events-none' 
                     : 'bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600'
                 }`}
@@ -507,6 +538,7 @@ export const VoiceOverPanel: React.FC = () => {
             }`}
             style={{ direction: currentVoice?.isUrdu || (speakingStyle === SpeakingStyle.PODCAST && podcastLang === 'URDU') ? 'rtl' : 'ltr' }}
             placeholder={
+              speakingStyle === SpeakingStyle.STORY ? "Enter a topic (e.g., 'A story about a brave rabbit') or paste a raw story script here..." :
               speakingStyle === SpeakingStyle.PODCAST ? `Enter a topic or a script...\n\nExample Format:\n${currentPair?.speaker1.name}: Hello there!\n${currentPair?.speaker2.name}: Hi! How are you?\n\n(Or just click 'Auto-Script' to convert raw text)` :
               speakingStyle === SpeakingStyle.FICTION ? "Once upon a time, in a land far away..." :
               "Enter your text here..."
@@ -552,7 +584,9 @@ export const VoiceOverPanel: React.FC = () => {
             <div className="flex-1 overflow-hidden">
                 <div className="flex items-baseline justify-between mb-1">
                   <h3 className="font-semibold text-slate-200 truncate flex items-center gap-2">
-                    {speakingStyle === SpeakingStyle.PODCAST ? (
+                    {speakingStyle === SpeakingStyle.STORY ? (
+                        <><MoonStar size={14} className="text-yellow-400" /> Bedtime Story: {currentPair?.name}</>
+                    ) : speakingStyle === SpeakingStyle.PODCAST ? (
                         <><Users size={14} className="text-purple-400" /> Podcast: {currentPair?.name}</>
                     ) : (
                         <>{speakingStyle === SpeakingStyle.FICTION ? 'Story' : speakingStyle === SpeakingStyle.SINGING ? 'Song' : 'Speech'} Audio</>
