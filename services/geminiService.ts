@@ -93,6 +93,85 @@ export const improveScript = async (text: string, targetStyle: string): Promise<
 };
 
 /**
+ * Generates a prompt for video generation based on the script.
+ */
+export const generateVisualPrompt = async (script: string): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ parts: [{ text: `
+        Analyze the following script and describe a SINGLE, cinematic, high-quality stock video shot that would serve as a perfect background for the entire story.
+        
+        The description should be:
+        1. Visual only (no text about audio).
+        2. Suitable for AI Video Generation (Veo).
+        3. Cinematic, 4k, realistic lighting.
+        4. Abstract enough to loop well, or a specific scene that captures the mood.
+        
+        Script: "${script.substring(0, 1000)}"
+        
+        Return ONLY the prompt description.
+      ` }] }],
+    });
+    return response.text?.trim() || "A cinematic, peaceful background with soft lighting, 4k resolution.";
+  } catch (error) {
+    return "A cinematic, peaceful background with soft lighting, 4k resolution.";
+  }
+}
+
+/**
+ * Generates a video using Veo.
+ */
+export const generateVeoVideo = async (prompt: string): Promise<string> => {
+  // Check for paid API key selection (Veo requirement)
+  if (typeof window !== 'undefined' && (window as any).aistudio) {
+      const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+          await (window as any).aistudio.openSelectKey();
+          // Create new instance to pick up the key
+          // Note: In a real app we might need to handle the promise resolution carefully
+      }
+  }
+
+  // Re-instantiate to ensure key is active
+  const veoAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  try {
+    console.log("Starting Veo generation with prompt:", prompt);
+    let operation = await veoAi.models.generateVideos({
+      model: 'veo-3.1-fast-generate-preview',
+      prompt: prompt,
+      config: {
+        numberOfVideos: 1,
+        resolution: '720p',
+        aspectRatio: '16:9'
+      }
+    });
+
+    // Poll for completion
+    while (!operation.done) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Refresh operation status
+      operation = await veoAi.operations.getVideosOperation({operation: operation});
+    }
+
+    const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!videoUri) throw new Error("No video URI returned");
+
+    // Fetch the actual bytes
+    const response = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+    const blob = await response.blob();
+    
+    // Convert to Object URL
+    return URL.createObjectURL(blob);
+
+  } catch (error) {
+    console.error("Veo Generation Error:", error);
+    throw error;
+  }
+};
+
+/**
  * Analyzes an audio sample to create a "Cloned" voice profile (Style Matching).
  */
 export const analyzeVoiceSample = async (base64Audio: string, mimeType: string): Promise<{
