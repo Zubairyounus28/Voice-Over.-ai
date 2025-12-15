@@ -191,16 +191,19 @@ export const generateStoryScript = async (text: string, pairId: string, language
     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[3]; 
     const s1 = pair.speaker1.name; // Parent
     const s2 = pair.speaker2.name; // Child
+    
+    // Determine Role
+    const parentRole = (s1 === 'Mom' || s1 === 'Mother') ? 'Mother' : 'Father';
 
     const langInstruction = language === 'URDU'
         ? "Mix English with natural Roman Urdu (e.g. 'Beta, suno...', 'Bohat purani baat hai'). This is a Desi/Pakistani bedtime story context."
         : "Write in beautiful, soothing English.";
 
     const prompt = `Act as a professional creative writer for Bedtime Stories. 
-    Convert the following raw topic into a beautiful, soothing bedtime story interaction between a Father (${s1}) and a Child (${s2}).
+    Convert the following raw topic into a beautiful, soothing bedtime story interaction between a ${parentRole} (${s1}) and a Child (${s2}).
     
     Role:
-    - ${s1} (Father): Tells the story in a soothing, loving, beautiful voice. He explains things gently.
+    - ${s1} (${parentRole}): Tells the story in a soothing, loving, beautiful voice. ${parentRole === 'Father' ? 'He' : 'She'} explains things gently.
     - ${s2} (Child): Listens, occasionally asks cute questions, or reacts with wonder (or gets sleepy).
     
     Instructions:
@@ -260,12 +263,15 @@ export const generateSpeech = async (
      };
 
      if (style === SpeakingStyle.STORY) {
-         finalPrompt = `Task: Generate a heartwarming Bedtime Story interaction between a Father (${pair.speaker1.name}) and a Child (${pair.speaker2.name}).
+         const parentRole = (pair.speaker1.name === 'Mom' || pair.speaker1.name === 'Mother') ? 'Mother' : 'Father';
+         const parentAdjectives = parentRole === 'Father' ? 'extremely DEEP, SLOW, warm, and protective' : 'extremely SOFT, GENTLE, warm, and loving';
+
+         finalPrompt = `Task: Generate a heartwarming Bedtime Story interaction between a ${parentRole} (${pair.speaker1.name}) and a Child (${pair.speaker2.name}).
          
-         Context: The Father is telling a brief story to his children at night. 
+         Context: The ${parentRole} is telling a brief story to their child at night. 
          
          Voice Directions:
-         - ${pair.speaker1.name} (Father): Must sound extremely DEEP, SLOW, warm, and protective. 
+         - ${pair.speaker1.name} (${parentRole}): Must sound ${parentAdjectives}.
          - ${pair.speaker2.name} (Child): Must sound like a LITTLE KID (5 years old). High pitch, energetic, cute, and curious.
          
          Environment: Quiet, cozy night time.
