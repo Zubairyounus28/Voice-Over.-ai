@@ -297,9 +297,11 @@ export const generateSpeech = async (
     style: SpeakingStyle = SpeakingStyle.STANDARD,
     customVoiceData?: any 
 ) => {
+  // Use TTS specific model
   const model = "gemini-2.5-flash-preview-tts";
   
-  let config: any = { responseModalities: [Modality.AUDIO] };
+  // Explicitly cast strict string to avoid Enum resolution issues in some environments
+  let config: any = { responseModalities: ["AUDIO"] };
   let finalPrompt = text;
 
   if (style === SpeakingStyle.PODCAST || style === SpeakingStyle.STORY) {
@@ -322,19 +324,16 @@ export const generateSpeech = async (
 
      if (style === SpeakingStyle.STORY) {
          const parentRole = (pair.speaker1.name === 'Mom' || pair.speaker1.name === 'Mother') ? 'Mother' : 'Father';
-         const parentAdjectives = parentRole === 'Father' ? 'extremely DEEP, SLOW, warm, and protective' : 'extremely SOFT, GENTLE, warm, and loving';
+         const parentAdjectives = parentRole === 'Father' ? 'deep, warm' : 'soft, gentle';
 
-         finalPrompt = `Task: Generate a heartwarming Bedtime Story interaction between a ${parentRole} (${pair.speaker1.name}) and a Child (${pair.speaker2.name}).
+         // Simplified prompt to avoid confusing the TTS model with "Generation" tasks
+         finalPrompt = `Narrate the following Bedtime Story dialogue.
          
-         Context: The ${parentRole} is telling a brief story to their child at night. 
+         Voices:
+         - ${pair.speaker1.name} (${parentRole}): ${parentAdjectives}, comforting.
+         - ${pair.speaker2.name} (Child): High pitch, 5 years old, curious.
          
-         Voice Directions:
-         - ${pair.speaker1.name} (${parentRole}): Must sound ${parentAdjectives}.
-         - ${pair.speaker2.name} (Child): Must sound like a LITTLE KID (5 years old). High pitch, energetic, cute, and curious.
-         
-         Environment: Quiet, cozy night time.
-         
-         Dialogue to Narrate:
+         Dialogue:
          ${text}`;
      } else {
          finalPrompt = `TTS the following conversation between ${pair.speaker1.name} and ${pair.speaker2.name}.\n\n${text}`;
@@ -352,9 +351,10 @@ export const generateSpeech = async (
       };
 
       if (selectedVoice.isCloned && selectedVoice.stylePrompt) {
-        finalPrompt = `Task: Mimic the voice described below. Description: ${selectedVoice.stylePrompt}. Text: "${text}"`;
+        // Simplified instruction for TTS
+        finalPrompt = `(Style: ${selectedVoice.stylePrompt}) ${text}`;
       } else if (selectedVoice.isUrdu) {
-         finalPrompt = `Narrate the following text in Urdu with a natural Pakistani accent: ${text}`;
+         finalPrompt = `(Language: Urdu, Accent: Pakistani) ${text}`;
       } else {
         // Simple pass-through for stability
         finalPrompt = text;
@@ -371,12 +371,15 @@ export const generateSpeech = async (
     const candidate = response.candidates?.[0];
     const part = candidate?.content?.parts?.[0];
 
+    // If the model returns text instead of audio (refusal), throw specific error
     if (part?.text && !part?.inlineData) {
-        throw new Error("AI refused to generate audio. Try simpler text.");
+        console.warn("Model returned text instead of audio:", part.text);
+        throw new Error("AI refused to generate audio. The text might be flagged or too complex.");
     }
 
     if (!part?.inlineData?.data) {
-      throw new Error("No audio data returned.");
+      console.error("Empty response from Audio Model", response);
+      throw new Error("No audio data returned. Please try again with shorter text.");
     }
 
     return part.inlineData.data; 
