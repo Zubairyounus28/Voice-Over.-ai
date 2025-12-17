@@ -319,16 +319,29 @@ export const VoiceOverPanel: React.FC = () => {
               ...audioDest.stream.getAudioTracks()
           ]);
 
+          // Determine supported MIME type (Prefer MP4)
+          let mimeType = 'video/webm'; 
+          if (MediaRecorder.isTypeSupported('video/mp4')) {
+            mimeType = 'video/mp4';
+          } else if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264')) {
+            mimeType = 'video/mp4;codecs=h264';
+          } else if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
+            mimeType = 'video/mp4;codecs=avc1';
+          } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+            mimeType = 'video/webm;codecs=vp9,opus';
+          }
+
           const recorder = new MediaRecorder(combinedStream, {
-              mimeType: 'video/webm;codecs=vp9,opus'
+              mimeType: mimeType
           });
 
           const chunks: BlobPart[] = [];
           recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
           
           recorder.onstop = () => {
-              const filename = aspectRatio === "9:16" ? "story_shorts.webm" : "story_video.webm";
-              const blob = new Blob(chunks, { type: 'video/webm' });
+              const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+              const filename = aspectRatio === "9:16" ? `story_shorts.${ext}` : `story_video.${ext}`;
+              const blob = new Blob(chunks, { type: mimeType });
               downloadBlob(blob, filename);
               setIsRenderingVideo(false);
           };
