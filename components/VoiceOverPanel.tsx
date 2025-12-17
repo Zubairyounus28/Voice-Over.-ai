@@ -262,6 +262,42 @@ export const VoiceOverPanel: React.FC = () => {
     }
   };
 
+  const drawToCanvas = async (canvas: HTMLCanvasElement): Promise<void> => {
+      if (!storyImageUrl) return;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const img = new Image();
+      img.src = storyImageUrl;
+      await new Promise(r => img.onload = r);
+
+      // Setup Canvas Resolution based on Aspect Ratio
+      const width = aspectRatio === "9:16" ? 720 : 1280;
+      const height = aspectRatio === "9:16" ? 1280 : 720;
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Draw Image (Cover Mode)
+      const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+      const x = (canvas.width / 2) - (img.width / 2) * scale;
+      const y = (canvas.height / 2) - (img.height / 2) * scale;
+      ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+
+      // Add simple overlay text
+      const overlayHeight = 200;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
+      
+      ctx.font = 'bold 40px Inter, sans-serif';
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      // Use generated title or fallback
+      const titleToUse = storyTitle || "Meri Kahani";
+      ctx.fillText(titleToUse, canvas.width / 2, canvas.height - (overlayHeight / 2) + 15);
+  }
+
   // Merges the Story Image + Audio into a Video
   const handleDownloadStoryVideo = async () => {
       if (!audioBuffer || !storyImageUrl || !audioContextRef.current || !canvasRef.current) return;
@@ -271,38 +307,7 @@ export const VoiceOverPanel: React.FC = () => {
 
       try {
           const canvas = canvasRef.current;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) return;
-
-          // Load image
-          const img = new Image();
-          img.src = storyImageUrl;
-          await new Promise(r => img.onload = r);
-
-          // Setup Canvas Resolution based on Aspect Ratio
-          const width = aspectRatio === "9:16" ? 720 : 1280;
-          const height = aspectRatio === "9:16" ? 1280 : 720;
-          
-          canvas.width = width;
-          canvas.height = height;
-          
-          // Draw Image (Cover Mode)
-          const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
-          const x = (canvas.width / 2) - (img.width / 2) * scale;
-          const y = (canvas.height / 2) - (img.height / 2) * scale;
-          ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-
-          // Add simple overlay text
-          const overlayHeight = 200;
-          ctx.fillStyle = 'rgba(0,0,0,0.5)';
-          ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
-          
-          ctx.font = 'bold 40px Inter, sans-serif';
-          ctx.fillStyle = 'white';
-          ctx.textAlign = 'center';
-          // Use generated title or fallback
-          const titleToUse = storyTitle || "Meri Kahani";
-          ctx.fillText(titleToUse, canvas.width / 2, canvas.height - (overlayHeight / 2) + 15);
+          await drawToCanvas(canvas);
 
           // Prepare Audio Stream
           const audioDest = audioContextRef.current.createMediaStreamDestination();
@@ -360,6 +365,24 @@ export const VoiceOverPanel: React.FC = () => {
           alert("Failed to render video.");
           setIsRenderingVideo(false);
       }
+  };
+
+  const handleDownloadThumbnail = async () => {
+    if (!storyImageUrl || !canvasRef.current) return;
+    try {
+        const canvas = canvasRef.current;
+        await drawToCanvas(canvas);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = `story_cover_${Date.now()}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (e) {
+        console.error("Thumbnail save error", e);
+        alert("Failed to save thumbnail.");
+    }
   };
 
   const downloadBlob = (blob: Blob, filename: string) => {
@@ -752,12 +775,20 @@ export const VoiceOverPanel: React.FC = () => {
                          )}
                     </div>
                     {storyImageUrl && audioBuffer && (
-                        <button 
-                            onClick={handleDownloadStoryVideo}
-                            className="w-full py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
-                        >
-                            <Video size={14} /> Download as Video
-                        </button>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={handleDownloadStoryVideo}
+                                className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                            >
+                                <Video size={14} /> Video
+                            </button>
+                            <button 
+                                onClick={handleDownloadThumbnail}
+                                className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                            >
+                                <ImageIcon size={14} /> JPG
+                            </button>
+                        </div>
                     )}
                 </div>
             )}
