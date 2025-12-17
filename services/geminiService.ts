@@ -231,6 +231,32 @@ export const generateStoryScript = async (text: string, pairId: string, language
 };
 
 /**
+ * Generates a short title for the story in Roman Urdu/Hindi.
+ */
+export const generateStoryTitle = async (storyText: string): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ parts: [{ text: `
+        Analyze this story and generate a short, engaging title (max 5 words).
+        CRITICAL RULE: The title MUST be in Roman Urdu or Roman Hindi (English Alphabets).
+        Example: "Jadooee Chirag" or "Sher Ki Kahani".
+        Do not use English words unless they are common in Urdu/Hindi.
+        Do not use Urdu script, use Roman alphabets.
+        
+        Story: "${storyText.substring(0, 1000)}"
+        
+        Output only the title text.
+      ` }] }],
+    });
+    return response.text?.trim().replace(/^"|"$/g, '') || "Meri Kahani";
+  } catch (error) {
+    console.warn("Title generation failed.", error);
+    return "Meri Kahani";
+  }
+};
+
+/**
  * Generates a 3D Pixar-style illustration for the story.
  */
 export const generateStoryImage = async (storyText: string, aspectRatio: "9:16" | "16:9"): Promise<string> => {

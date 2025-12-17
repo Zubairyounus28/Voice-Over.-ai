@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint, CheckCircle2, MoonStar, Image as ImageIcon, Video, Monitor, Smartphone } from 'lucide-react';
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, VoiceOption, PodcastPair, VoiceGender, SpeakingStyle } from '../types';
-import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, analyzeVoiceSample, optimizeScriptForSpeech, generateStoryImage } from '../services/geminiService';
+import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, analyzeVoiceSample, optimizeScriptForSpeech, generateStoryImage, generateStoryTitle } from '../services/geminiService';
 import { decodeBase64, decodeAudioData, audioBufferToWav, fileToBase64 } from '../utils/audioUtils';
 
 export const VoiceOverPanel: React.FC = () => {
@@ -29,6 +29,7 @@ export const VoiceOverPanel: React.FC = () => {
   // Content Data
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [storyImageUrl, setStoryImageUrl] = useState<string | null>(null);
+  const [storyTitle, setStoryTitle] = useState<string>("");
   
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   
@@ -56,7 +57,8 @@ export const VoiceOverPanel: React.FC = () => {
   const handleGenerate = async () => {
     if (!text.trim()) return;
     setIsLoading(true);
-    setStoryImageUrl(null); // Reset image on new generation
+    setStoryImageUrl(null); 
+    setStoryTitle("");
     stopAudio(); 
 
     try {
@@ -74,7 +76,7 @@ export const VoiceOverPanel: React.FC = () => {
       
       const customVoice = clonedVoices.find(v => v.id === selectedVoiceId);
       
-      // Parallel execution for Story mode: Generate Audio AND Image
+      // Parallel execution for Story mode: Generate Audio AND Image AND Title
       const promises: Promise<any>[] = [
          generateSpeech(finalText, idToUse, speakingStyle, customVoice)
       ];
@@ -86,12 +88,13 @@ export const VoiceOverPanel: React.FC = () => {
             console.error("Image gen failed", e);
             return null;
          }));
+         // Generate Roman Urdu Title
+         promises.push(generateStoryTitle(finalText).catch(e => "Meri Kahani"));
       }
 
       const results = await Promise.all(promises);
       const base64Audio = results[0];
-      const base64Image = results[1]; // Undefined if not story mode
-
+      
       // Process Audio
       const rawBytes = decodeBase64(base64Audio);
       if (audioContextRef.current) {
@@ -99,9 +102,17 @@ export const VoiceOverPanel: React.FC = () => {
         setAudioBuffer(decodedBuffer);
       }
 
-      // Process Image
-      if (base64Image) {
-          setStoryImageUrl(`data:image/png;base64,${base64Image}`);
+      // Process Story Assets
+      if (speakingStyle === SpeakingStyle.STORY) {
+          const base64Image = results[1];
+          const generatedTitle = results[2];
+          
+          if (base64Image) {
+              setStoryImageUrl(`data:image/png;base64,${base64Image}`);
+          }
+          if (generatedTitle) {
+              setStoryTitle(generatedTitle);
+          }
       }
 
     } catch (error) {
@@ -289,7 +300,9 @@ export const VoiceOverPanel: React.FC = () => {
           ctx.font = 'bold 40px Inter, sans-serif';
           ctx.fillStyle = 'white';
           ctx.textAlign = 'center';
-          ctx.fillText("Bedtime Story", canvas.width / 2, canvas.height - (overlayHeight / 2) + 15);
+          // Use generated title or fallback
+          const titleToUse = storyTitle || "Meri Kahani";
+          ctx.fillText(titleToUse, canvas.width / 2, canvas.height - (overlayHeight / 2) + 15);
 
           // Prepare Audio Stream
           const audioDest = audioContextRef.current.createMediaStreamDestination();
@@ -718,6 +731,11 @@ export const VoiceOverPanel: React.FC = () => {
                                  <div className="w-8 h-8 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mb-2"></div>
                                  <span className="text-xs">Generating Art...</span>
                              </div>
+                         )}
+                         {storyTitle && !isGeneratingImage && (
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm p-2 text-center">
+                                <span className="text-xs font-bold text-white line-clamp-2">{storyTitle}</span>
+                            </div>
                          )}
                     </div>
                     {storyImageUrl && audioBuffer && (
