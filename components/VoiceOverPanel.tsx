@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint, CheckCircle2, MoonStar } from 'lucide-react';
+import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint, CheckCircle2, MoonStar, Image as ImageIcon, Video, Monitor, Smartphone } from 'lucide-react';
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, VoiceOption, PodcastPair, VoiceGender, SpeakingStyle } from '../types';
-import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, analyzeVoiceSample, optimizeScriptForSpeech } from '../services/geminiService';
+import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, analyzeVoiceSample, optimizeScriptForSpeech, generateStoryImage } from '../services/geminiService';
 import { decodeBase64, decodeAudioData, audioBufferToWav, fileToBase64 } from '../utils/audioUtils';
 
 export const VoiceOverPanel: React.FC = () => {
@@ -13,15 +13,23 @@ export const VoiceOverPanel: React.FC = () => {
   const [speakingStyle, setSpeakingStyle] = useState<SpeakingStyle>(SpeakingStyle.STANDARD);
   const [podcastLang, setPodcastLang] = useState<'ENGLISH' | 'URDU'>('ENGLISH');
   const [isEnhancementEnabled, setIsEnhancementEnabled] = useState<boolean>(true); // Default to true for better results
-  
+  const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16"); // Aspect ratio for story mode
+
   // Custom Voice State
   const [clonedVoices, setClonedVoices] = useState<VoiceOption[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   
+  // Generation States
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isProcessingScript, setIsProcessingScript] = useState<boolean>(false);
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
+  const [isRenderingVideo, setIsRenderingVideo] = useState<boolean>(false);
+
+  // Content Data
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const [storyImageUrl, setStoryImageUrl] = useState<string | null>(null);
+  
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   
   // Audio Context Refs
@@ -29,6 +37,9 @@ export const VoiceOverPanel: React.FC = () => {
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Canvas Ref for Video Generation
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     // Initialize AudioContext
@@ -45,13 +56,13 @@ export const VoiceOverPanel: React.FC = () => {
   const handleGenerate = async () => {
     if (!text.trim()) return;
     setIsLoading(true);
+    setStoryImageUrl(null); // Reset image on new generation
     stopAudio(); 
 
     try {
       let finalText = text;
 
       // 1. Optimize Script if Enabled 
-      // (Not in podcast/story mode, as those have their own script generation tools)
       if (isEnhancementEnabled && speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY) {
          finalText = await optimizeScriptForSpeech(text);
          setText(finalText);
@@ -63,17 +74,41 @@ export const VoiceOverPanel: React.FC = () => {
       
       const customVoice = clonedVoices.find(v => v.id === selectedVoiceId);
       
-      const base64Audio = await generateSpeech(finalText, idToUse, speakingStyle, customVoice);
+      // Parallel execution for Story mode: Generate Audio AND Image
+      const promises: Promise<any>[] = [
+         generateSpeech(finalText, idToUse, speakingStyle, customVoice)
+      ];
+
+      if (speakingStyle === SpeakingStyle.STORY) {
+         setIsGeneratingImage(true);
+         // Generate image based on the text
+         promises.push(generateStoryImage(finalText, aspectRatio).catch(e => {
+            console.error("Image gen failed", e);
+            return null;
+         }));
+      }
+
+      const results = await Promise.all(promises);
+      const base64Audio = results[0];
+      const base64Image = results[1]; // Undefined if not story mode
+
+      // Process Audio
       const rawBytes = decodeBase64(base64Audio);
-      
       if (audioContextRef.current) {
         const decodedBuffer = await decodeAudioData(rawBytes, audioContextRef.current);
         setAudioBuffer(decodedBuffer);
       }
+
+      // Process Image
+      if (base64Image) {
+          setStoryImageUrl(`data:image/png;base64,${base64Image}`);
+      }
+
     } catch (error) {
-      alert("Failed to generate voice. Please try again.");
+      alert("Failed to generate content. Please try again.");
     } finally {
       setIsLoading(false);
+      setIsGeneratingImage(false);
     }
   };
 
@@ -216,6 +251,91 @@ export const VoiceOverPanel: React.FC = () => {
     }
   };
 
+  // Merges the Story Image + Audio into a Video
+  const handleDownloadStoryVideo = async () => {
+      if (!audioBuffer || !storyImageUrl || !audioContextRef.current || !canvasRef.current) return;
+      
+      setIsRenderingVideo(true);
+      stopAudio(); // Stop any playback
+
+      try {
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+
+          // Load image
+          const img = new Image();
+          img.src = storyImageUrl;
+          await new Promise(r => img.onload = r);
+
+          // Setup Canvas Resolution based on Aspect Ratio
+          const width = aspectRatio === "9:16" ? 720 : 1280;
+          const height = aspectRatio === "9:16" ? 1280 : 720;
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw Image (Cover Mode)
+          const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+          const x = (canvas.width / 2) - (img.width / 2) * scale;
+          const y = (canvas.height / 2) - (img.height / 2) * scale;
+          ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+
+          // Add simple overlay text
+          const overlayHeight = 200;
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
+          
+          ctx.font = 'bold 40px Inter, sans-serif';
+          ctx.fillStyle = 'white';
+          ctx.textAlign = 'center';
+          ctx.fillText("Bedtime Story", canvas.width / 2, canvas.height - (overlayHeight / 2) + 15);
+
+          // Prepare Audio Stream
+          const audioDest = audioContextRef.current.createMediaStreamDestination();
+          const source = audioContextRef.current.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(audioDest);
+
+          // Prepare Video Stream (30 FPS)
+          const videoStream = canvas.captureStream(30);
+          
+          // Combine
+          const combinedStream = new MediaStream([
+              ...videoStream.getVideoTracks(),
+              ...audioDest.stream.getAudioTracks()
+          ]);
+
+          const recorder = new MediaRecorder(combinedStream, {
+              mimeType: 'video/webm;codecs=vp9,opus'
+          });
+
+          const chunks: BlobPart[] = [];
+          recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+          
+          recorder.onstop = () => {
+              const filename = aspectRatio === "9:16" ? "story_shorts.webm" : "story_video.webm";
+              const blob = new Blob(chunks, { type: 'video/webm' });
+              downloadBlob(blob, filename);
+              setIsRenderingVideo(false);
+          };
+
+          // Start Recording
+          recorder.start();
+          source.start(0);
+          
+          // Stop when audio ends
+          source.onended = () => {
+              recorder.stop();
+          };
+
+      } catch (error) {
+          console.error("Video render error", error);
+          alert("Failed to render video.");
+          setIsRenderingVideo(false);
+      }
+  };
+
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -265,8 +385,20 @@ export const VoiceOverPanel: React.FC = () => {
       : AVAILABLE_PODCAST_PAIRS;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-140px)] min-h-[600px]">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-140px)] min-h-[600px] relative">
       
+      {/* Hidden Canvas for Video Generation */}
+      <canvas ref={canvasRef} className="hidden" />
+
+      {/* Rendering Overlay */}
+      {isRenderingVideo && (
+          <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl animate-fade-in">
+              <div className="w-16 h-16 border-4 border-red-500/30 border-t-red-500 rounded-full animate-spin mb-6"></div>
+              <h3 className="text-2xl font-bold text-white mb-2">Creating Video...</h3>
+              <p className="text-slate-400">Merging Pixar-style art with your audio.</p>
+          </div>
+      )}
+
       {/* LEFT SIDEBAR - SETTINGS */}
       <div className="lg:col-span-4 flex flex-col gap-4 h-full overflow-hidden">
         <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl flex flex-col h-full overflow-hidden">
@@ -318,6 +450,36 @@ export const VoiceOverPanel: React.FC = () => {
             {speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY ? (
               /* PODCAST/STORY SETTINGS */
               <section className="animate-fade-in">
+                
+                {/* Aspect Ratio Selector for Story Mode */}
+                {speakingStyle === SpeakingStyle.STORY && (
+                    <div className="mb-4 bg-slate-900 rounded-xl p-3 border border-slate-700">
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Video Aspect Ratio</h3>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setAspectRatio("9:16")}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                                    aspectRatio === "9:16" 
+                                    ? 'bg-indigo-600 text-white shadow-md' 
+                                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                                }`}
+                            >
+                                <Smartphone size={14} /> Portrait (Shorts)
+                            </button>
+                            <button
+                                onClick={() => setAspectRatio("16:9")}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                                    aspectRatio === "16:9" 
+                                    ? 'bg-indigo-600 text-white shadow-md' 
+                                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                                }`}
+                            >
+                                <Monitor size={14} /> Landscape
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex items-center justify-between mb-3">
                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                        {speakingStyle === SpeakingStyle.STORY ? 'Story Family & Language' : 'Podcast Duo & Language'}
@@ -526,20 +688,49 @@ export const VoiceOverPanel: React.FC = () => {
             </div>
           </div>
           
-          <textarea
-            className={`flex-1 w-full bg-slate-900/50 border border-slate-700 rounded-xl p-6 text-lg text-slate-100 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none resize-none transition-all placeholder-slate-600 leading-relaxed ${
-              currentVoice?.isUrdu || podcastLang === 'URDU' ? 'text-right font-[Inter]' : ''
-            }`}
-            style={{ direction: currentVoice?.isUrdu || (speakingStyle === SpeakingStyle.PODCAST && podcastLang === 'URDU') ? 'rtl' : 'ltr' }}
-            placeholder={
-              speakingStyle === SpeakingStyle.STORY ? `Enter a story topic (e.g., 'A rabbit who wanted to fly').\n\nClick "Magic Story Writer" to generate a full bilingual dialogue!` :
-              speakingStyle === SpeakingStyle.PODCAST ? `Enter a topic...\n\nExample Format:\n${currentPair?.speaker1.name}: Hello there!\n${currentPair?.speaker2.name}: Hi! How are you?\n\n(Or just click 'Auto-Script' to convert raw text)` :
-              speakingStyle === SpeakingStyle.FICTION ? "Once upon a time, in a land far away..." :
-              "Enter your text here..."
-            }
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
+          <div className="flex gap-6 h-full">
+            <textarea
+                className={`flex-1 w-full bg-slate-900/50 border border-slate-700 rounded-xl p-6 text-lg text-slate-100 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none resize-none transition-all placeholder-slate-600 leading-relaxed ${
+                currentVoice?.isUrdu || podcastLang === 'URDU' ? 'text-right font-[Inter]' : ''
+                }`}
+                style={{ direction: currentVoice?.isUrdu || (speakingStyle === SpeakingStyle.PODCAST && podcastLang === 'URDU') ? 'rtl' : 'ltr' }}
+                placeholder={
+                speakingStyle === SpeakingStyle.STORY ? `Enter a story topic (e.g., 'A rabbit who wanted to fly').\n\nClick "Magic Story Writer" to generate a full bilingual dialogue!` :
+                speakingStyle === SpeakingStyle.PODCAST ? `Enter a topic...\n\nExample Format:\n${currentPair?.speaker1.name}: Hello there!\n${currentPair?.speaker2.name}: Hi! How are you?\n\n(Or just click 'Auto-Script' to convert raw text)` :
+                speakingStyle === SpeakingStyle.FICTION ? "Once upon a time, in a land far away..." :
+                "Enter your text here..."
+                }
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+            />
+            
+            {/* Story Image Preview Panel */}
+            {speakingStyle === SpeakingStyle.STORY && (storyImageUrl || isGeneratingImage) && (
+                <div className="w-1/3 flex flex-col gap-2 animate-fade-in">
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                        <ImageIcon size={14} /> Story Art (Pixar Style)
+                    </div>
+                    <div className="flex-1 bg-slate-900 rounded-xl border border-slate-700 overflow-hidden relative">
+                         {storyImageUrl ? (
+                             <img src={storyImageUrl} className="w-full h-full object-cover" alt="Generated Story Art" />
+                         ) : (
+                             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
+                                 <div className="w-8 h-8 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mb-2"></div>
+                                 <span className="text-xs">Generating Art...</span>
+                             </div>
+                         )}
+                    </div>
+                    {storyImageUrl && audioBuffer && (
+                        <button 
+                            onClick={handleDownloadStoryVideo}
+                            className="w-full py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <Video size={14} /> Download as Video
+                        </button>
+                    )}
+                </div>
+            )}
+          </div>
 
           <div className="mt-6 flex justify-end">
              <button
@@ -559,7 +750,7 @@ export const VoiceOverPanel: React.FC = () => {
                ) : (
                  <>
                    <Wand2 size={20} />
-                   <span>Generate Voice Over</span>
+                   <span>{speakingStyle === SpeakingStyle.STORY ? 'Generate Audio & Art' : 'Generate Voice Over'}</span>
                  </>
                )}
              </button>

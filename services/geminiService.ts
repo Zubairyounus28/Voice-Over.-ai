@@ -231,6 +231,38 @@ export const generateStoryScript = async (text: string, pairId: string, language
 };
 
 /**
+ * Generates a 3D Pixar-style illustration for the story.
+ */
+export const generateStoryImage = async (storyText: string, aspectRatio: "9:16" | "16:9"): Promise<string> => {
+    try {
+        // Truncate story text to fit prompt limits if necessary and ensure it focuses on visual description
+        const composition = aspectRatio === "9:16" ? "Vertical composition" : "Cinematic landscape composition";
+        const prompt = `Create a cute, high-quality, 3D Pixar-style digital illustration representing this bedtime story: "${storyText.substring(0, 500)}". The image should be magical, colorful, and suitable for children. ${composition}.`;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash-image",
+            contents: { parts: [{ text: prompt }] },
+            config: {
+                imageConfig: {
+                    aspectRatio: aspectRatio, 
+                }
+            }
+        });
+
+        for (const part of response.candidates?.[0]?.content?.parts || []) {
+            if (part.inlineData) {
+                return part.inlineData.data;
+            }
+        }
+        
+        throw new Error("No image data found in response");
+    } catch (error) {
+        console.error("Image generation error:", error);
+        throw error;
+    }
+};
+
+/**
  * Generates speech from text using the specified voice/pair and style.
  */
 export const generateSpeech = async (
