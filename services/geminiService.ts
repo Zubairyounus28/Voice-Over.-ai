@@ -202,14 +202,15 @@ export const generateStoryScript = async (text: string, pairId: string, language
     const prompt = `Act as a professional creative writer for Bedtime Stories. 
     Convert the following raw topic into a beautiful, soothing bedtime story interaction between a ${parentRole} (${s1}) and a Child (${s2}).
     
-    Role:
-    - ${s1} (${parentRole}): Tells the story in a soothing, loving, beautiful voice. ${parentRole === 'Father' ? 'He' : 'She'} explains things gently.
-    - ${s2} (Child): Listens, occasionally asks cute questions, or reacts with wonder (or gets sleepy).
+    Role Differentiation:
+    - ${s1} (${parentRole}): Speaks with wisdom, patience, and a deeper, calming tone.
+    - ${s2} (Child): Speaks with curiosity, excitement, high energy, and short sentences.
     
     Instructions:
     1. Determine if the topic is Fiction or Non-Fiction and adapt the tone (Magical vs Educational).
     2. ${langInstruction}
     3. Keep the conversation natural and heartwarming.
+    4. ADD SOUND EFFECTS in brackets like [Sighs], [Laughs], [Yawns] where appropriate.
     
     Format the output strictly as:
     ${s1}: [Line]
@@ -239,10 +240,11 @@ export const generateStoryTitle = async (storyText: string): Promise<string> => 
       model: "gemini-2.5-flash",
       contents: [{ parts: [{ text: `
         Analyze this story and generate a short, engaging title (max 5 words).
-        CRITICAL RULE: The title MUST be in Roman Urdu or Roman Hindi (English Alphabets).
-        Example: "Jadooee Chirag" or "Sher Ki Kahani".
-        Do not use English words unless they are common in Urdu/Hindi.
-        Do not use Urdu script, use Roman alphabets.
+        CRITICAL RULES:
+        1. The title MUST be in **Roman Urdu** (English Alphabets).
+        2. DO NOT use Arabic/Urdu script (like 'شیر').
+        3. DO NOT use Hindi script.
+        4. Example: "Jadooee Chirag", "Sher Ki Kahani", "Pyara Dost".
         
         Story: "${storyText.substring(0, 1000)}"
         
@@ -257,13 +259,50 @@ export const generateStoryTitle = async (storyText: string): Promise<string> => 
 };
 
 /**
+ * Generates YouTube Metadata (Title, Description, Tags)
+ */
+export const generateYouTubeMetadata = async (storyText: string): Promise<{title: string, description: string, tags: string}> => {
+  try {
+      const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [{ parts: [{ text: `
+            Act as a YouTube SEO Expert. Generate metadata for this Bedtime Story.
+            
+            Story Script:
+            ${storyText.substring(0, 1500)}
+            
+            Requirements:
+            1. Title: Catchy, Emotional, in mixed English/Roman Urdu (e.g., "The Magical Lion - Sher Ki Kahani | Bedtime Story").
+            2. Description: 2-3 sentences summarizing the moral and plot, asking users to subscribe.
+            3. Tags: 15-20 comma-separated keywords (include: Urdu Story, Kids Story, Bedtime Story, Moral Story, Hindi Kahaniya, VoxStudio AI).
+            
+            Return JSON format: { "title": "...", "description": "...", "tags": "..." }
+          ` }] }],
+          config: {
+              responseMimeType: "application/json"
+          }
+      });
+      
+      const json = JSON.parse(response.text || "{}");
+      return {
+          title: json.title || "Amazing Bedtime Story | Urdu Story",
+          description: json.description || "Watch this amazing bedtime story for kids. Please subscribe for more!",
+          tags: json.tags || "kids story, bedtime story, urdu story"
+      };
+  } catch (e) {
+      console.warn("Metadata gen failed", e);
+      return { title: "", description: "", tags: "" };
+  }
+}
+
+/**
  * Generates a 3D Pixar-style illustration for the story.
  */
 export const generateStoryImage = async (storyText: string, aspectRatio: "9:16" | "16:9"): Promise<string> => {
     try {
         // Truncate story text to fit prompt limits if necessary and ensure it focuses on visual description
         const composition = aspectRatio === "9:16" ? "Vertical composition" : "Cinematic landscape composition";
-        const prompt = `Create a cute, high-quality, 3D Pixar-style digital illustration representing this bedtime story: "${storyText.substring(0, 500)}". The image should be magical, colorful, and suitable for children. ${composition}.`;
+        const prompt = `Create a cute, high-quality, 3D Pixar-style digital illustration representing this bedtime story: "${storyText.substring(0, 500)}". The image should be magical, colorful, and suitable for children. ${composition}. Do not include any text in the image.`;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-image",
@@ -324,14 +363,21 @@ export const generateSpeech = async (
 
      if (style === SpeakingStyle.STORY) {
          const parentRole = (pair.speaker1.name === 'Mom' || pair.speaker1.name === 'Mother') ? 'Mother' : 'Father';
-         const parentAdjectives = parentRole === 'Father' ? 'deep, warm' : 'soft, gentle';
-
-         // Simplified prompt to avoid confusing the TTS model with "Generation" tasks
-         finalPrompt = `Narrate the following Bedtime Story dialogue.
          
-         Voices:
-         - ${pair.speaker1.name} (${parentRole}): ${parentAdjectives}, comforting.
-         - ${pair.speaker2.name} (Child): High pitch, 5 years old, curious.
+         // DRAMATICALLY enhance voice difference prompt
+         const parentInstructions = parentRole === 'Father' 
+            ? 'Deep, chest-resonant, calm, adult male voice. Very soothing and low pitch.' 
+            : 'Soft, warm, mature adult female voice. Motherly and caring.';
+         
+         const childInstructions = 'High-pitched, energetic, fast-paced, excited 5-year-old child voice. Clear difference in age from the parent.';
+
+         finalPrompt = `Narrate the following Bedtime Story dialogue with extreme voice differentiation.
+         
+         Character Instructions:
+         1. ${pair.speaker1.name} (${parentRole}): ${parentInstructions}
+         2. ${pair.speaker2.name} (Child): ${childInstructions}
+         
+         The distinction between the adult and child must be obvious.
          
          Dialogue:
          ${text}`;

@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint, CheckCircle2, MoonStar, Image as ImageIcon, Video, Monitor, Smartphone } from 'lucide-react';
+import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint, CheckCircle2, MoonStar, Image as ImageIcon, Video, Monitor, Smartphone, Youtube, Hash, Copy, FileText } from 'lucide-react';
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, VoiceOption, PodcastPair, VoiceGender, SpeakingStyle } from '../types';
-import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, analyzeVoiceSample, optimizeScriptForSpeech, generateStoryImage, generateStoryTitle } from '../services/geminiService';
+import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, analyzeVoiceSample, optimizeScriptForSpeech, generateStoryImage, generateStoryTitle, generateYouTubeMetadata } from '../services/geminiService';
 import { decodeBase64, decodeAudioData, audioBufferToWav, fileToBase64 } from '../utils/audioUtils';
 
 export const VoiceOverPanel: React.FC = () => {
@@ -30,6 +30,7 @@ export const VoiceOverPanel: React.FC = () => {
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [storyImageUrl, setStoryImageUrl] = useState<string | null>(null);
   const [storyTitle, setStoryTitle] = useState<string>("");
+  const [youtubeMeta, setYoutubeMeta] = useState<{title: string, description: string, tags: string} | null>(null);
   
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   
@@ -59,6 +60,7 @@ export const VoiceOverPanel: React.FC = () => {
     setIsLoading(true);
     setStoryImageUrl(null); 
     setStoryTitle("");
+    setYoutubeMeta(null);
     stopAudio(); 
 
     try {
@@ -76,7 +78,7 @@ export const VoiceOverPanel: React.FC = () => {
       
       const customVoice = clonedVoices.find(v => v.id === selectedVoiceId);
       
-      // Parallel execution for Story mode: Generate Audio AND Image AND Title
+      // Parallel execution for Story mode: Generate Audio AND Image AND Title AND Metadata
       const promises: Promise<any>[] = [
          generateSpeech(finalText, idToUse, speakingStyle, customVoice)
       ];
@@ -90,6 +92,8 @@ export const VoiceOverPanel: React.FC = () => {
          }));
          // Generate Roman Urdu Title
          promises.push(generateStoryTitle(finalText).catch(e => "Meri Kahani"));
+         // Generate YouTube Meta
+         promises.push(generateYouTubeMetadata(finalText).catch(e => null));
       }
 
       const results = await Promise.all(promises);
@@ -106,12 +110,16 @@ export const VoiceOverPanel: React.FC = () => {
       if (speakingStyle === SpeakingStyle.STORY) {
           const base64Image = results[1];
           const generatedTitle = results[2];
+          const meta = results[3];
           
           if (base64Image) {
               setStoryImageUrl(`data:image/png;base64,${base64Image}`);
           }
           if (generatedTitle) {
               setStoryTitle(generatedTitle);
+          }
+          if (meta) {
+              setYoutubeMeta(meta);
           }
       }
 
@@ -392,6 +400,11 @@ export const VoiceOverPanel: React.FC = () => {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  };
+  
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert("Copied to clipboard!");
   };
 
   const renderOfflineWithPitch = async (buffer: AudioBuffer, detuneVal: number): Promise<AudioBuffer> => {
@@ -871,6 +884,50 @@ export const VoiceOverPanel: React.FC = () => {
               <span>Save WAV</span>
             </button>
         </div>
+
+        {/* YouTube Metadata Section */}
+        {youtubeMeta && speakingStyle === SpeakingStyle.STORY && (
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 animate-fade-in-up">
+                <div className="flex items-center gap-2 mb-4 border-b border-slate-800 pb-3">
+                    <Youtube className="text-red-500" size={24} />
+                    <h3 className="text-lg font-bold text-white">YouTube Metadata</h3>
+                    <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded ml-2">SEO Optimized</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Video Title</label>
+                                <button onClick={() => copyToClipboard(youtubeMeta.title)} className="text-indigo-400 hover:text-white"><Copy size={12} /></button>
+                            </div>
+                            <div className="bg-slate-950 p-3 rounded-lg text-sm text-slate-200 border border-slate-800">
+                                {youtubeMeta.title}
+                            </div>
+                        </div>
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Description</label>
+                                <button onClick={() => copyToClipboard(youtubeMeta.description)} className="text-indigo-400 hover:text-white"><Copy size={12} /></button>
+                            </div>
+                            <div className="bg-slate-950 p-3 rounded-lg text-sm text-slate-300 border border-slate-800 h-24 overflow-y-auto">
+                                {youtubeMeta.description}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div className="flex justify-between items-center mb-1">
+                             <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><Hash size={12}/> Tags (Comma Separated)</label>
+                             <button onClick={() => copyToClipboard(youtubeMeta.tags)} className="text-indigo-400 hover:text-white"><Copy size={12} /></button>
+                        </div>
+                        <div className="bg-slate-950 p-3 rounded-lg text-xs text-slate-400 border border-slate-800 h-[170px] overflow-y-auto font-mono leading-relaxed">
+                            {youtubeMeta.tags}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
 
       </div>
     </div>
