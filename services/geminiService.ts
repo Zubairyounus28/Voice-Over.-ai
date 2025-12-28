@@ -2,27 +2,17 @@
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, SpeakingStyle, VoiceGender } from "../types";
 
-// Ensure API key exists
-const API_KEY = process.env.API_KEY;
-
-if (!API_KEY) {
-  console.error("API_KEY is missing from environment variables.");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY || '' });
-
 /**
- * Translates text to Urdu.
+ * Translates text to Urdu using Gemini 3 Flash.
  */
 export const translateToUrdu = async (text: string): Promise<string> => {
   if (!text.trim()) return "";
-  
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: [{ parts: [{ text: `Translate the following text to Urdu (Pakistani standard). Provide only the translated Urdu text, nothing else:\n\n${text}` }] }],
     });
-    
     return response.text?.trim() || "";
   } catch (error) {
     console.error("Translation error:", error);
@@ -31,12 +21,13 @@ export const translateToUrdu = async (text: string): Promise<string> => {
 };
 
 /**
- * Optimizes script for TTS performance.
+ * Optimizes script for TTS performance using Gemini 3 Flash.
  */
 export const optimizeScriptForSpeech = async (text: string): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: [{ parts: [{ text: `
         Act as a professional Voice Director. Rewrite the following script to be optimized for Text-to-Speech generation.
         Objectives: Fix grammatical errors, insert punctuation for breathing, break run-on sentences.
@@ -51,64 +42,13 @@ export const optimizeScriptForSpeech = async (text: string): Promise<string> => 
 };
 
 /**
- * Translates script for Video Dubbing.
+ * Analyzes an audio sample for AI voice cloning parameters.
  */
-export const translateScript = async (text: string, targetLanguage: string): Promise<string> => {
+export const analyzeVoiceSample = async (base64Audio: string, mimeType: string): Promise<any> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ parts: [{ text: `
-        Act as a professional dubbing translator. Translate the following video transcript into "${targetLanguage}".
-        Rules: Natural colloquial flow, match approximate length/rhythm for lip-sync, maintain emotional tone.
-        Original Text: "${text}"
-      ` }] }],
-    });
-    return response.text?.trim() || text;
-  } catch (error) {
-    console.warn("Translation failed.", error);
-    return text;
-  }
-};
-
-/**
- * Improves the script for a specific accent/style.
- */
-export const improveScript = async (text: string, targetStyle: string): Promise<string> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ parts: [{ text: `
-        Act as a professional script editor. Rewrite the following transcript to match a "${targetStyle}" style. 
-        Rules: Fix grammar, improve vocabulary, ensure natural flow, keep original meaning.
-        Original Text: "${text}"
-      ` }] }],
-    });
-    return response.text?.trim() || text;
-  } catch (error) {
-    console.warn("Script improvement failed.", error);
-    return text;
-  }
-};
-
-/**
- * Analyzes an audio sample to create a "Cloned" voice profile.
- */
-export const analyzeVoiceSample = async (base64Audio: string, mimeType: string): Promise<{
-  name: string;
-  description: string;
-  stylePrompt: string;
-  baseVoice: string;
-  pitch: number;
-  gender: VoiceGender;
-  age: string;
-  accent: string;
-  language: string;
-  intonation?: string;
-  rhythm?: string;
-}> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: {
         parts: [
           { inlineData: { mimeType, data: base64Audio } },
@@ -130,7 +70,8 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
             actingPrompt: { type: Type.STRING },
             baseVoice: { type: Type.STRING, enum: ["Fenrir", "Puck", "Kore", "Zephyr"] },
             pitch: { type: Type.NUMBER },
-          }
+          },
+          required: ["gender", "baseVoice", "pitch"]
         }
       }
     });
@@ -156,25 +97,19 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
 };
 
 /**
- * Generates a podcast script from raw text.
+ * Generates a podcast dialogue script.
  */
 export const generatePodcastScript = async (text: string, pairId: string, language: 'ENGLISH' | 'URDU'): Promise<string> => {
     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[0];
-    const s1 = pair.speaker1.name;
-    const s2 = pair.speaker2.name;
-
-    const langInstruction = language === 'URDU' 
-        ? "The dialogue must be in Urdu (Roman Urdu or Urdu script as preferred, but make it natural)." 
-        : "The dialogue must be in English.";
-
-    const prompt = `Convert the following text into a natural, engaging podcast dialogue script between two speakers: ${s1} and ${s2}.
-    ${langInstruction}
-    Format: ${s1}: [Line] ...
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const prompt = `Convert the following text into a natural, engaging podcast dialogue script between ${pair.speaker1.name} and ${pair.speaker2.name}. 
+    ${language === 'URDU' ? "The dialogue must be in natural Roman Urdu." : "The dialogue must be in English."}
+    Format: ${pair.speaker1.name}: [Line] ...
     Original Text: ${text}`;
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: [{ parts: [{ text: prompt }] }],
         });
         return response.text?.trim() || "";
@@ -185,43 +120,21 @@ export const generatePodcastScript = async (text: string, pairId: string, langua
 };
 
 /**
- * Generates a Bedtime Story script from raw text (Story Mode).
+ * Generates a Bedtime Story dialogue script.
  */
 export const generateStoryScript = async (text: string, pairId: string, language: 'ENGLISH' | 'URDU'): Promise<string> => {
     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[3]; 
-    const s1 = pair.speaker1.name; // Parent
-    const s2 = pair.speaker2.name; // Child
-    
-    // Determine Role
-    const parentRole = (s1 === 'Mom' || s1 === 'Mother') ? 'Mother' : 'Father';
-
-    const langInstruction = language === 'URDU'
-        ? "Mix English with natural Roman Urdu (e.g. 'Beta, suno...', 'Bohat purani baat hai'). This is a Desi/Pakistani bedtime story context."
-        : "Write in beautiful, soothing English.";
-
-    const prompt = `Act as a professional creative writer for Bedtime Stories. 
-    Convert the following raw topic into a beautiful, soothing bedtime story interaction between a ${parentRole} (${s1}) and a Child (${s2}).
-    
-    Role Differentiation:
-    - ${s1} (${parentRole}): Speaks with wisdom, patience, and a deeper, calming tone.
-    - ${s2} (Child): Speaks with curiosity, excitement, high energy, and short sentences.
-    
-    Instructions:
-    1. Determine if the topic is Fiction or Non-Fiction and adapt the tone (Magical vs Educational).
-    2. ${langInstruction}
-    3. Keep the conversation natural and heartwarming.
-    4. ADD SOUND EFFECTS in brackets like [Sighs], [Laughs], [Yawns] where appropriate.
-    
-    Format the output strictly as:
-    ${s1}: [Line]
-    ${s2}: [Line]
-    
-    Raw Topic/Script:
-    ${text}`;
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const prompt = `Convert the following topic into a soothing bedtime story dialogue between ${pair.speaker1.name} (Adult) and ${pair.speaker2.name} (Child).
+    ${language === 'URDU' ? "Use natural Roman Urdu." : "Use beautiful English."}
+    Format strictly as:
+    ${pair.speaker1.name}: [Line]
+    ${pair.speaker2.name}: [Line]
+    Topic: ${text}`;
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: [{ parts: [{ text: prompt }] }],
         });
         return response.text?.trim() || "";
@@ -232,95 +145,76 @@ export const generateStoryScript = async (text: string, pairId: string, language
 };
 
 /**
- * Generates a short title for the story in Roman Urdu/Hindi.
+ * Generates a short story title in Roman Urdu/Hindi.
  */
 export const generateStoryTitle = async (storyText: string): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: [{ parts: [{ text: `
-        Analyze this story and generate a short, engaging title (max 5 words).
-        CRITICAL RULES:
-        1. The title MUST be in **Roman Urdu** (English Alphabets).
-        2. DO NOT use Arabic/Urdu script (like 'شیر').
-        3. DO NOT use Hindi script.
-        4. Example: "Jadooee Chirag", "Sher Ki Kahani", "Pyara Dost".
-        
-        Story: "${storyText.substring(0, 1000)}"
-        
-        Output only the title text.
+        Generate a catchy title (max 4 words) for this story.
+        CRITICAL: Use ONLY Roman Urdu (English Alphabets). 
+        STRICTLY NO Urdu Script (Arabic characters).
+        STRICTLY NO Hindi Script.
+        Example: "Sher Ki Bahani", "Jadooee Jungle".
+        Story: "${storyText.substring(0, 500)}"
       ` }] }],
     });
     return response.text?.trim().replace(/^"|"$/g, '') || "Meri Kahani";
   } catch (error) {
-    console.warn("Title generation failed.", error);
     return "Meri Kahani";
   }
 };
 
 /**
- * Generates YouTube Metadata (Title, Description, Tags)
+ * Generates YouTube SEO Metadata using Gemini 3 Flash.
  */
 export const generateYouTubeMetadata = async (storyText: string): Promise<{title: string, description: string, tags: string}> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
       const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: "gemini-3-flash-preview",
           contents: [{ parts: [{ text: `
-            Act as a YouTube SEO Expert. Generate metadata for this Bedtime Story.
+            Act as a YouTube SEO Expert. Generate metadata for this story.
+            Story: ${storyText.substring(0, 1000)}
             
-            Story Script:
-            ${storyText.substring(0, 1500)}
-            
-            Requirements:
-            1. Title: Catchy, Emotional, in mixed English/Roman Urdu (e.g., "The Magical Lion - Sher Ki Kahani | Bedtime Story").
-            2. Description: 2-3 sentences summarizing the moral and plot, asking users to subscribe.
-            3. Tags: 15-20 comma-separated keywords (include: Urdu Story, Kids Story, Bedtime Story, Moral Story, Hindi Kahaniya, VoxStudio AI).
-            
-            Return JSON format: { "title": "...", "description": "...", "tags": "..." }
+            Return JSON:
+            {
+              "title": "A viral, emotional title in mixed English/Roman Urdu",
+              "description": "A 3-sentence summary with call to action",
+              "tags": "20 comma-separated SEO keywords"
+            }
           ` }] }],
-          config: {
-              responseMimeType: "application/json"
-          }
+          config: { responseMimeType: "application/json" }
       });
-      
-      const json = JSON.parse(response.text || "{}");
+      const res = JSON.parse(response.text || "{}");
       return {
-          title: json.title || "Amazing Bedtime Story | Urdu Story",
-          description: json.description || "Watch this amazing bedtime story for kids. Please subscribe for more!",
-          tags: json.tags || "kids story, bedtime story, urdu story"
+          title: res.title || "New Bedtime Story",
+          description: res.description || "Amazing bedtime story for kids. Subscribe for more!",
+          tags: res.tags || "kids story, bedtime story, urdu story"
       };
   } catch (e) {
-      console.warn("Metadata gen failed", e);
-      return { title: "", description: "", tags: "" };
+      return { title: "Amazing Story", description: "Watch this story!", tags: "story, kids" };
   }
-}
+};
 
 /**
- * Generates a 3D Pixar-style illustration for the story.
+ * Generates Pixar-style story image using Gemini 2.5 Flash Image.
  */
 export const generateStoryImage = async (storyText: string, aspectRatio: "9:16" | "16:9"): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
-        // Truncate story text to fit prompt limits if necessary and ensure it focuses on visual description
-        const composition = aspectRatio === "9:16" ? "Vertical composition" : "Cinematic landscape composition";
-        const prompt = `Create a cute, high-quality, 3D Pixar-style digital illustration representing this bedtime story: "${storyText.substring(0, 500)}". The image should be magical, colorful, and suitable for children. ${composition}. Do not include any text in the image.`;
-
+        const prompt = `Pixar-style 3D digital illustration for: "${storyText.substring(0, 400)}". Magical, vibrant, kid-friendly. No text in image. Aspect ratio: ${aspectRatio}.`;
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-image",
             contents: { parts: [{ text: prompt }] },
-            config: {
-                imageConfig: {
-                    aspectRatio: aspectRatio, 
-                }
-            }
+            config: { imageConfig: { aspectRatio } }
         });
-
         for (const part of response.candidates?.[0]?.content?.parts || []) {
-            if (part.inlineData) {
-                return part.inlineData.data;
-            }
+            if (part.inlineData) return part.inlineData.data;
         }
-        
-        throw new Error("No image data found in response");
+        throw new Error("No image data");
     } catch (error) {
         console.error("Image generation error:", error);
         throw error;
@@ -328,7 +222,56 @@ export const generateStoryImage = async (storyText: string, aspectRatio: "9:16" 
 };
 
 /**
- * Generates speech from text using the specified voice/pair and style.
+ * Generates a visual prompt for high-quality video generation.
+ */
+export const generateVisualPrompt = async (script: string): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{ parts: [{ text: `Create a detailed visual description (max 50 words) for an AI video generation model based on this story part: "${script}". Focus on cinematic lighting, style, and key subjects. No text in output.` }] }],
+    });
+    return response.text?.trim() || "A cinematic animated scene.";
+  } catch (e) {
+    return "A cinematic animated scene.";
+  }
+};
+
+/**
+ * Generates video using Veo 3.1 Fast. Handles API key selection.
+ */
+export const generateVeoVideo = async (prompt: string): Promise<string> => {
+  // Ensure user has selected a paid API key for Veo
+  if (!(await (window as any).aistudio.hasSelectedApiKey())) {
+    await (window as any).aistudio.openSelectKey();
+  }
+  
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  let operation = await ai.models.generateVideos({
+    model: 'veo-3.1-fast-generate-preview',
+    prompt: prompt,
+    config: {
+      numberOfVideos: 1,
+      resolution: '720p',
+      aspectRatio: '16:9'
+    }
+  });
+
+  // Long-running operation polling
+  while (!operation.done) {
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    operation = await ai.operations.getVideosOperation({ operation: operation });
+  }
+
+  const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+  if (!downloadLink) throw new Error("Video generation failed.");
+  
+  // Append API key for direct download as per Veo guidelines
+  return `${downloadLink}&key=${process.env.API_KEY}`;
+};
+
+/**
+ * Generates speech using Gemini 2.5 Flash Preview TTS.
  */
 export const generateSpeech = async (
     text: string, 
@@ -336,15 +279,15 @@ export const generateSpeech = async (
     style: SpeakingStyle = SpeakingStyle.STANDARD,
     customVoiceData?: any 
 ) => {
-  // Use TTS specific model
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = "gemini-2.5-flash-preview-tts";
   
-  // Explicitly cast strict string to avoid Enum resolution issues in some environments
-  let config: any = { responseModalities: ["AUDIO"] };
+  let config: any = { responseModalities: [Modality.AUDIO] };
   let finalPrompt = text;
 
+  // Handle Multi-Speaker (Story/Podcast)
   if (style === SpeakingStyle.PODCAST || style === SpeakingStyle.STORY) {
-     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === voiceOrPairId) || AVAILABLE_PODCAST_PAIRS[0];
+     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === voiceOrPairId) || AVAILABLE_PODCAST_PAIRS[3];
      
      config.speechConfig = {
         multiSpeakerVoiceConfig: {
@@ -362,49 +305,27 @@ export const generateSpeech = async (
      };
 
      if (style === SpeakingStyle.STORY) {
-         const parentRole = (pair.speaker1.name === 'Mom' || pair.speaker1.name === 'Mother') ? 'Mother' : 'Father';
-         
-         // DRAMATICALLY enhance voice difference prompt
-         const parentInstructions = parentRole === 'Father' 
-            ? 'Deep, chest-resonant, calm, adult male voice. Very soothing and low pitch.' 
-            : 'Soft, warm, mature adult female voice. Motherly and caring.';
-         
-         const childInstructions = 'High-pitched, energetic, fast-paced, excited 5-year-old child voice. Clear difference in age from the parent.';
+        const parentRole = (pair.speaker1.name === 'Mom' || pair.speaker1.name === 'Mother') ? 'Mother' : 'Father';
+        const pDesc = parentRole === 'Father' ? 'Adult Male, Deep, Very Low Pitch, Mature' : 'Adult Female, Warm, Mature, Calm';
+        const cDesc = 'Child, Very High Pitch, Energetic, Small Boy/Girl Voice';
 
-         finalPrompt = `Narrate the following Bedtime Story dialogue with extreme voice differentiation.
-         
-         Character Instructions:
-         1. ${pair.speaker1.name} (${parentRole}): ${parentInstructions}
-         2. ${pair.speaker2.name} (Child): ${childInstructions}
-         
-         The distinction between the adult and child must be obvious.
-         
-         Dialogue:
-         ${text}`;
+        finalPrompt = `ACTORS:
+        1. ${pair.speaker1.name}: ${pDesc}.
+        2. ${pair.speaker2.name}: ${cDesc}.
+        
+        NARRATE DIALOGUE:
+        ${text}`;
      } else {
-         finalPrompt = `TTS the following conversation between ${pair.speaker1.name} and ${pair.speaker2.name}.\n\n${text}`;
+        finalPrompt = `TTS CONVERSATION:\n${text}`;
      }
 
   } else {
-      let selectedVoice = AVAILABLE_VOICES.find(v => v.id === voiceOrPairId);
-      if (!selectedVoice && customVoiceData && customVoiceData.id === voiceOrPairId) {
-          selectedVoice = customVoiceData;
-      }
-      if (!selectedVoice) selectedVoice = AVAILABLE_VOICES[1];
-      
+      // Single Speaker
+      let voice = AVAILABLE_VOICES.find(v => v.id === voiceOrPairId) || customVoiceData || AVAILABLE_VOICES[1];
       config.speechConfig = {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: selectedVoice.geminiVoiceName } },
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: voice.geminiVoiceName } },
       };
-
-      if (selectedVoice.isCloned && selectedVoice.stylePrompt) {
-        // Simplified instruction for TTS
-        finalPrompt = `(Style: ${selectedVoice.stylePrompt}) ${text}`;
-      } else if (selectedVoice.isUrdu) {
-         finalPrompt = `(Language: Urdu, Accent: Pakistani) ${text}`;
-      } else {
-        // Simple pass-through for stability
-        finalPrompt = text;
-      }
+      finalPrompt = text;
   }
 
   try {
@@ -414,108 +335,60 @@ export const generateSpeech = async (
       config: config,
     });
 
-    const candidate = response.candidates?.[0];
-    const part = candidate?.content?.parts?.[0];
+    const part = response.candidates?.[0]?.content?.parts?.[0];
 
-    // If the model returns text instead of audio (refusal), throw specific error
     if (part?.text && !part?.inlineData) {
-        console.warn("Model returned text instead of audio:", part.text);
-        throw new Error("AI refused to generate audio. The text might be flagged or too complex.");
+        throw new Error(`AI Refusal: ${part.text}`);
     }
 
     if (!part?.inlineData?.data) {
-      console.error("Empty response from Audio Model", response);
-      throw new Error("No audio data returned. Please try again with shorter text.");
+      throw new Error("No audio data returned from model.");
     }
 
     return part.inlineData.data; 
-  } catch (error) {
-    console.error("Error generating speech:", error);
-    throw error;
+  } catch (error: any) {
+    console.error("Speech Gen Error:", error);
+    throw new Error(error.message || "Speech generation failed.");
   }
 };
 
+/**
+ * Transcribes video using Gemini 3 Flash.
+ */
 export const transcribeVideo = async (base64Video: string, mimeType: string) => {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: {
-        parts: [
-          { inlineData: { mimeType, data: base64Video } },
-          { text: "Transcribe the speech in this video." },
-        ],
-      },
-    });
-    return response.text;
-  } catch (error) {
-    console.error("Error transcribing video:", error);
-    throw error;
-  }
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: {
+      parts: [
+        { inlineData: { mimeType, data: base64Video } },
+        { text: "Transcribe the speech in this video." },
+      ],
+    },
+  });
+  return response.text;
 };
 
 /**
- * Generates a visual description prompt for video generation based on a script.
+ * Translates script using Gemini 3 Flash.
  */
-export const generateVisualPrompt = async (script: string): Promise<string> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ parts: [{ text: `
-        Act as a professional cinematographer. Create a concise, visually rich description for a video generation model (like Veo) based on this story segment.
-        Focus on: Subject appearance, Action, Environment, Lighting, and Mood.
-        Keep it under 300 characters.
-        Story Script: "${script.substring(0, 1000)}"
-      ` }] }],
-    });
-    return response.text?.trim() || "A cinematic scene representing the story.";
-  } catch (error) {
-    console.warn("Visual prompt generation failed.", error);
-    return "A cinematic scene representing the story.";
-  }
+export const translateScript = async (text: string, lang: string) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [{ parts: [{ text: `Translate this to ${lang}: ${text}` }] }],
+  });
+  return response.text;
 };
 
 /**
- * Generates a video using Veo model.
+ * Improves script style using Gemini 3 Flash.
  */
-export const generateVeoVideo = async (prompt: string): Promise<string> => {
-  try {
-    // Create new instance to ensure fresh API key usage for Veo as per guidelines
-    const veoAi = new GoogleGenAI({ apiKey: process.env.API_KEY || '' }); 
-
-    let operation = await veoAi.models.generateVideos({
-      model: 'veo-3.1-fast-generate-preview',
-      prompt: prompt,
-      config: {
-        numberOfVideos: 1,
-        resolution: '720p', 
-        aspectRatio: '16:9'
-      }
-    });
-
-    while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      operation = await veoAi.operations.getVideosOperation({operation: operation});
-    }
-
-    if (operation.error) {
-       throw new Error(`Video generation failed: ${operation.error.message}`);
-    }
-    
-    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) {
-        throw new Error("No video URI returned.");
-    }
-
-    // Fetch with API key to get the bytes
-    const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-    if (!videoResponse.ok) {
-        throw new Error("Failed to download generated video.");
-    }
-    const blob = await videoResponse.blob();
-    return URL.createObjectURL(blob);
-
-  } catch (error) {
-    console.error("Veo generation error:", error);
-    throw error;
-  }
+export const improveScript = async (text: string, style: string) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [{ parts: [{ text: `Improve this script for ${style}: ${text}` }] }],
+  });
+  return response.text;
 };

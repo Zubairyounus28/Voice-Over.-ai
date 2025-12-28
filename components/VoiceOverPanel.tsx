@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint, CheckCircle2, MoonStar, Image as ImageIcon, Video, Monitor, Smartphone, Youtube, Hash, Copy, FileText } from 'lucide-react';
+import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint, CheckCircle2, MoonStar, Image as ImageIcon, Video, Monitor, Smartphone, Youtube, Hash, Copy, FileText, Check, RefreshCw } from 'lucide-react';
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, VoiceOption, PodcastPair, VoiceGender, SpeakingStyle } from '../types';
 import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, analyzeVoiceSample, optimizeScriptForSpeech, generateStoryImage, generateStoryTitle, generateYouTubeMetadata } from '../services/geminiService';
 import { decodeBase64, decodeAudioData, audioBufferToWav, fileToBase64 } from '../utils/audioUtils';
@@ -9,11 +9,11 @@ export const VoiceOverPanel: React.FC = () => {
   const [text, setText] = useState<string>('');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>(AVAILABLE_VOICES[1].id);
   const [selectedPairId, setSelectedPairId] = useState<string>(AVAILABLE_PODCAST_PAIRS[0].id);
-  const [pitch, setPitch] = useState<number>(0); // detune in cents
+  const [pitch, setPitch] = useState<number>(0); 
   const [speakingStyle, setSpeakingStyle] = useState<SpeakingStyle>(SpeakingStyle.STANDARD);
   const [podcastLang, setPodcastLang] = useState<'ENGLISH' | 'URDU'>('ENGLISH');
-  const [isEnhancementEnabled, setIsEnhancementEnabled] = useState<boolean>(true); // Default to true for better results
-  const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16"); // Aspect ratio for story mode
+  const [isEnhancementEnabled, setIsEnhancementEnabled] = useState<boolean>(true);
+  const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
 
   // Custom Voice State
   const [clonedVoices, setClonedVoices] = useState<VoiceOption[]>([]);
@@ -44,15 +44,11 @@ export const VoiceOverPanel: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    // Initialize AudioContext
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
     gainNodeRef.current = audioContextRef.current.createGain();
     gainNodeRef.current.connect(audioContextRef.current.destination);
-
-    return () => {
-      audioContextRef.current?.close();
-    };
+    return () => { audioContextRef.current?.close(); };
   }, []);
 
   const handleGenerate = async () => {
@@ -65,66 +61,42 @@ export const VoiceOverPanel: React.FC = () => {
 
     try {
       let finalText = text;
-
-      // 1. Optimize Script if Enabled 
       if (isEnhancementEnabled && speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY) {
          finalText = await optimizeScriptForSpeech(text);
          setText(finalText);
       }
 
-      // 2. Generate Audio
       const isMultiSpeaker = speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY;
       const idToUse = isMultiSpeaker ? selectedPairId : selectedVoiceId;
-      
       const customVoice = clonedVoices.find(v => v.id === selectedVoiceId);
       
-      // Parallel execution for Story mode: Generate Audio AND Image AND Title AND Metadata
       const promises: Promise<any>[] = [
          generateSpeech(finalText, idToUse, speakingStyle, customVoice)
       ];
 
       if (speakingStyle === SpeakingStyle.STORY) {
          setIsGeneratingImage(true);
-         // Generate image based on the text
-         promises.push(generateStoryImage(finalText, aspectRatio).catch(e => {
-            console.error("Image gen failed", e);
-            return null;
-         }));
-         // Generate Roman Urdu Title
-         promises.push(generateStoryTitle(finalText).catch(e => "Meri Kahani"));
-         // Generate YouTube Meta
-         promises.push(generateYouTubeMetadata(finalText).catch(e => null));
+         promises.push(generateStoryImage(finalText, aspectRatio).catch(() => null));
+         promises.push(generateStoryTitle(finalText).catch(() => "Story"));
+         promises.push(generateYouTubeMetadata(finalText).catch(() => null));
       }
 
       const results = await Promise.all(promises);
       const base64Audio = results[0];
       
-      // Process Audio
       const rawBytes = decodeBase64(base64Audio);
       if (audioContextRef.current) {
         const decodedBuffer = await decodeAudioData(rawBytes, audioContextRef.current);
         setAudioBuffer(decodedBuffer);
       }
 
-      // Process Story Assets
       if (speakingStyle === SpeakingStyle.STORY) {
-          const base64Image = results[1];
-          const generatedTitle = results[2];
-          const meta = results[3];
-          
-          if (base64Image) {
-              setStoryImageUrl(`data:image/png;base64,${base64Image}`);
-          }
-          if (generatedTitle) {
-              setStoryTitle(generatedTitle);
-          }
-          if (meta) {
-              setYoutubeMeta(meta);
-          }
+          if (results[1]) setStoryImageUrl(`data:image/png;base64,${results[1]}`);
+          if (results[2]) setStoryTitle(results[2]);
+          if (results[3]) setYoutubeMeta(results[3]);
       }
-
-    } catch (error) {
-      alert("Failed to generate content. Please try again.");
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
     } finally {
       setIsLoading(false);
       setIsGeneratingImage(false);
@@ -137,15 +109,6 @@ export const VoiceOverPanel: React.FC = () => {
     try {
       const translatedText = await translateToUrdu(text);
       setText(translatedText);
-      // Automatically switch to Urdu voice if regular mode
-      if (speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY) {
-        const urduVoice = AVAILABLE_VOICES.find(v => v.isUrdu);
-        if (urduVoice && selectedVoiceId !== urduVoice.id) {
-          handleVoiceSelect(urduVoice);
-        }
-      }
-    } catch (error) {
-      alert("Translation failed.");
     } finally {
       setIsTranslating(false);
     }
@@ -155,17 +118,10 @@ export const VoiceOverPanel: React.FC = () => {
       if (!text.trim()) return;
       setIsProcessingScript(true);
       try {
-          let script = "";
-          if (speakingStyle === SpeakingStyle.STORY) {
-              // Bedtime Story Mode (Passes Lang for Mixed Urdu support)
-              script = await generateStoryScript(text, selectedPairId, podcastLang);
-          } else {
-              // Podcast Mode
-              script = await generatePodcastScript(text, selectedPairId, podcastLang);
-          }
+          const script = speakingStyle === SpeakingStyle.STORY 
+            ? await generateStoryScript(text, selectedPairId, podcastLang)
+            : await generatePodcastScript(text, selectedPairId, podcastLang);
           setText(script);
-      } catch (error) {
-          alert("Failed to create script.");
       } finally {
           setIsProcessingScript(false);
       }
@@ -173,32 +129,14 @@ export const VoiceOverPanel: React.FC = () => {
 
   const handleVoiceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (file.size > 10 * 1024 * 1024) {
-        alert("File too large. Please upload an audio sample under 10MB.");
-        return;
-      }
-
       setIsAnalyzing(true);
       try {
-        const base64 = await fileToBase64(file);
-        const analysis = await analyzeVoiceSample(base64, file.type);
-        
-        const newVoice: VoiceOption = {
-          id: `custom_${Date.now()}`,
-          name: analysis.name,
-          gender: analysis.gender,
-          description: analysis.description,
-          geminiVoiceName: analysis.baseVoice,
-          recommendedPitch: analysis.pitch,
-          isCloned: true,
-          stylePrompt: analysis.stylePrompt
-        };
-
+        const base64 = await fileToBase64(e.target.files[0]);
+        const voice = await analyzeVoiceSample(base64, e.target.files[0].type);
+        const newVoice: VoiceOption = { ...voice, id: `custom_${Date.now()}`, isCloned: true };
         setClonedVoices(prev => [...prev, newVoice]);
-        handleVoiceSelect(newVoice);
-      } catch (error) {
-        alert("Failed to analyze voice sample. Please try a clearer recording.");
+        setSelectedVoiceId(newVoice.id);
+        setPitch(newVoice.recommendedPitch);
       } finally {
         setIsAnalyzing(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -206,31 +144,16 @@ export const VoiceOverPanel: React.FC = () => {
     }
   };
 
-  const handleVoiceSelect = (voice: VoiceOption) => {
-    setSelectedVoiceId(voice.id);
-    setPitch(voice.recommendedPitch);
-  };
-
   const playAudio = () => {
     if (!audioBuffer || !audioContextRef.current || !gainNodeRef.current) return;
-
-    if (sourceNodeRef.current) {
-      try {
-        sourceNodeRef.current.stop();
-      } catch (e) {}
-    }
-
+    stopAudio();
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBuffer;
-    
-    // Disable pitch shifting for Podcast/Story mode as it's multi-speaker mixed
     if (speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY) {
         source.detune.value = pitch; 
     }
-
     source.connect(gainNodeRef.current);
     source.onended = () => setIsPlaying(false);
-    
     source.start(0);
     sourceNodeRef.current = source;
     setIsPlaying(true);
@@ -238,697 +161,289 @@ export const VoiceOverPanel: React.FC = () => {
 
   const stopAudio = () => {
     if (sourceNodeRef.current) {
-      try {
-        sourceNodeRef.current.stop();
-      } catch (e) {}
+      try { sourceNodeRef.current.stop(); } catch(e) {}
       sourceNodeRef.current = null;
     }
     setIsPlaying(false);
   };
 
-  const togglePlayback = () => {
-    if (isPlaying) {
-      stopAudio();
-    } else {
-      playAudio();
-    }
-  };
+  const togglePlayback = () => isPlaying ? stopAudio() : playAudio();
 
   const handleDownload = () => {
     if (!audioBuffer) return;
-    
-    // For Podcast/Story or zero pitch, direct download. For modified pitch, render offline.
-    const isMulti = speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY;
-    if (pitch === 0 || isMulti) {
-      const wavBlob = audioBufferToWav(audioBuffer);
-      downloadBlob(wavBlob, 'voice-over.wav');
-    } else {
-      renderOfflineWithPitch(audioBuffer, pitch).then(renderedBuffer => {
-        const wavBlob = audioBufferToWav(renderedBuffer);
-        downloadBlob(wavBlob, 'voice-over-modified.wav');
-      });
-    }
+    const wavBlob = audioBufferToWav(audioBuffer);
+    const url = URL.createObjectURL(wavBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'voiceover.wav';
+    a.click();
   };
 
   const drawToCanvas = async (canvas: HTMLCanvasElement): Promise<void> => {
       if (!storyImageUrl) return;
-      
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-
       const img = new Image();
       img.src = storyImageUrl;
       await new Promise(r => img.onload = r);
-
-      // Setup Canvas Resolution based on Aspect Ratio
-      const width = aspectRatio === "9:16" ? 720 : 1280;
-      const height = aspectRatio === "9:16" ? 1280 : 720;
-      
-      canvas.width = width;
-      canvas.height = height;
-      
-      // Draw Image (Cover Mode)
+      canvas.width = aspectRatio === "9:16" ? 720 : 1280;
+      canvas.height = aspectRatio === "9:16" ? 1280 : 720;
       const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
-      const x = (canvas.width / 2) - (img.width / 2) * scale;
-      const y = (canvas.height / 2) - (img.height / 2) * scale;
-      ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-
-      // Add simple overlay text
-      const overlayHeight = 200;
+      ctx.drawImage(img, (canvas.width - img.width * scale) / 2, (canvas.height - img.height * scale) / 2, img.width * scale, img.height * scale);
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
-      
-      ctx.font = 'bold 40px Inter, sans-serif';
+      ctx.fillRect(0, canvas.height - 180, canvas.width, 180);
+      ctx.font = 'bold 45px Inter, sans-serif';
       ctx.fillStyle = 'white';
       ctx.textAlign = 'center';
-      // Use generated title or fallback
-      const titleToUse = storyTitle || "Meri Kahani";
-      ctx.fillText(titleToUse, canvas.width / 2, canvas.height - (overlayHeight / 2) + 15);
+      ctx.fillText(storyTitle || "Story", canvas.width / 2, canvas.height - 90);
   }
 
-  // Merges the Story Image + Audio into a Video
   const handleDownloadStoryVideo = async () => {
-      if (!audioBuffer || !storyImageUrl || !audioContextRef.current || !canvasRef.current) return;
-      
+      if (!audioBuffer || !storyImageUrl || !canvasRef.current) return;
       setIsRenderingVideo(true);
-      stopAudio(); // Stop any playback
-
       try {
           const canvas = canvasRef.current;
           await drawToCanvas(canvas);
-
-          // Prepare Audio Stream
-          const audioDest = audioContextRef.current.createMediaStreamDestination();
-          const source = audioContextRef.current.createBufferSource();
+          const videoStream = canvas.captureStream(30);
+          const audioDest = audioContextRef.current!.createMediaStreamDestination();
+          const source = audioContextRef.current!.createBufferSource();
           source.buffer = audioBuffer;
           source.connect(audioDest);
-
-          // Prepare Video Stream (30 FPS)
-          const videoStream = canvas.captureStream(30);
-          
-          // Combine
-          const combinedStream = new MediaStream([
-              ...videoStream.getVideoTracks(),
-              ...audioDest.stream.getAudioTracks()
-          ]);
-
-          // Determine supported MIME type (Prefer MP4)
-          let mimeType = 'video/webm'; 
-          if (MediaRecorder.isTypeSupported('video/mp4')) {
-            mimeType = 'video/mp4';
-          } else if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264')) {
-            mimeType = 'video/mp4;codecs=h264';
-          } else if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
-            mimeType = 'video/mp4;codecs=avc1';
-          } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
-            mimeType = 'video/webm;codecs=vp9,opus';
-          }
-
-          const recorder = new MediaRecorder(combinedStream, {
-              mimeType: mimeType
-          });
-
-          const chunks: BlobPart[] = [];
-          recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-          
+          const combined = new MediaStream([...videoStream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
+          const mime = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
+          const recorder = new MediaRecorder(combined, { mimeType: mime });
+          const chunks: Blob[] = [];
+          recorder.ondataavailable = e => chunks.push(e.data);
           recorder.onstop = () => {
-              const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-              const filename = aspectRatio === "9:16" ? `story_shorts.${ext}` : `story_video.${ext}`;
-              const blob = new Blob(chunks, { type: mimeType });
-              downloadBlob(blob, filename);
+              const blob = new Blob(chunks, { type: mime });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `story.${mime.split('/')[1]}`;
+              a.click();
               setIsRenderingVideo(false);
           };
-
-          // Start Recording
           recorder.start();
           source.start(0);
-          
-          // Stop when audio ends
-          source.onended = () => {
-              recorder.stop();
-          };
-
-      } catch (error) {
-          console.error("Video render error", error);
-          alert("Failed to render video.");
+          source.onended = () => recorder.stop();
+      } catch (e) {
           setIsRenderingVideo(false);
+          alert("Export failed.");
       }
   };
 
   const handleDownloadThumbnail = async () => {
-    if (!storyImageUrl || !canvasRef.current) return;
-    try {
-        const canvas = canvasRef.current;
-        await drawToCanvas(canvas);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        const link = document.createElement('a');
-        link.href = dataUrl;
-        link.download = `story_cover_${Date.now()}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    } catch (e) {
-        console.error("Thumbnail save error", e);
-        alert("Failed to save thumbnail.");
-    }
+    if (!canvasRef.current) return;
+    await drawToCanvas(canvasRef.current);
+    const link = document.createElement('a');
+    link.href = canvasRef.current.toDataURL('image/jpeg', 0.9);
+    link.download = 'story_thumbnail.jpg';
+    link.click();
   };
 
-  const downloadBlob = (blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-  
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert("Copied to clipboard!");
+    alert("Copied!");
   };
 
-  const renderOfflineWithPitch = async (buffer: AudioBuffer, detuneVal: number): Promise<AudioBuffer> => {
-    const rate = Math.pow(2, detuneVal / 1200);
-    const newDuration = buffer.duration / rate;
-    
-    const offlineCtx = new OfflineAudioContext(
-      buffer.numberOfChannels,
-      Math.ceil(newDuration * buffer.sampleRate),
-      buffer.sampleRate
-    );
-
-    const source = offlineCtx.createBufferSource();
-    source.buffer = buffer;
-    source.detune.value = detuneVal;
-    source.connect(offlineCtx.destination);
-    source.start(0);
-
-    return await offlineCtx.startRendering();
-  };
-
-  // Group voices by gender for UI
   const allVoices = [...AVAILABLE_VOICES, ...clonedVoices];
-  const groupedVoices = {
-    [VoiceGender.MALE]: allVoices.filter(v => v.gender === VoiceGender.MALE),
-    [VoiceGender.FEMALE]: allVoices.filter(v => v.gender === VoiceGender.FEMALE),
-    [VoiceGender.CHILD]: allVoices.filter(v => v.gender === VoiceGender.CHILD),
+  const grouped = {
+    MALE: allVoices.filter(v => v.gender === VoiceGender.MALE),
+    FEMALE: allVoices.filter(v => v.gender === VoiceGender.FEMALE),
+    CHILD: allVoices.filter(v => v.gender === VoiceGender.CHILD),
   };
-
-  const currentVoice = allVoices.find(v => v.id === selectedVoiceId);
-  const currentPair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === selectedPairId);
-
-  // Filter pairs for Story mode (Look for Parent/Child descriptions or names)
-  const filteredPairs = speakingStyle === SpeakingStyle.STORY 
-      ? AVAILABLE_PODCAST_PAIRS.filter(p => 
-          p.description.includes("Story") || 
-          p.speaker1.name === "Dad" || 
-          p.speaker1.name === "Mom"
-        )
-      : AVAILABLE_PODCAST_PAIRS;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-140px)] min-h-[600px] relative">
-      
-      {/* Hidden Canvas for Video Generation */}
       <canvas ref={canvasRef} className="hidden" />
-
-      {/* Rendering Overlay */}
       {isRenderingVideo && (
-          <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl animate-fade-in">
-              <div className="w-16 h-16 border-4 border-red-500/30 border-t-red-500 rounded-full animate-spin mb-6"></div>
-              <h3 className="text-2xl font-bold text-white mb-2">Creating Video...</h3>
-              <p className="text-slate-400">Merging Pixar-style art with your audio.</p>
+          <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in">
+              <div className="w-16 h-16 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mb-6"></div>
+              <h3 className="text-2xl font-bold text-white mb-2">Creating Final Video...</h3>
+              <p className="text-slate-400">Merging story art with your voiceover.</p>
           </div>
       )}
 
-      {/* LEFT SIDEBAR - SETTINGS */}
-      <div className="lg:col-span-4 flex flex-col gap-4 h-full overflow-hidden">
-        <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl flex flex-col h-full overflow-hidden">
-          <div className="p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur-sm z-10 flex justify-between items-center">
-             <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-               <Settings2 size={16} />
-               Configuration
-             </h2>
+      {/* Configuration Sidebar */}
+      <div className="lg:col-span-4 flex flex-col gap-4 overflow-hidden h-full">
+        <div className="bg-slate-800 rounded-2xl border border-slate-700 flex flex-col h-full overflow-hidden shadow-2xl">
+          <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
+             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><Settings2 size={16}/> Configuration</h2>
           </div>
-
           <div className="flex-1 overflow-y-auto p-4 space-y-8 custom-scrollbar">
-            
-            {/* Style Selection */}
-            <section className={currentVoice?.isUrdu && speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY ? 'opacity-50 pointer-events-none grayscale' : ''}>
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 flex justify-between">
-                <span>Speaking Style</span>
-                {currentVoice?.isUrdu && speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY && <span className="text-[10px] text-amber-500">Auto-set for Urdu</span>}
-              </h3>
+            {/* Style Selector */}
+            <section>
+              <h3 className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest">App Mode</h3>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { id: SpeakingStyle.STANDARD, label: 'Standard', icon: MessageSquare },
-                  { id: SpeakingStyle.FICTION, label: 'Fiction', icon: BookOpen },
-                  { id: SpeakingStyle.STORY, label: 'Bedtime Story', icon: MoonStar },
-                  { id: SpeakingStyle.PODCAST, label: 'Podcast', icon: Users },
-                  { id: SpeakingStyle.NON_FICTION, label: 'Docu', icon: Newspaper },
+                  { id: SpeakingStyle.STANDARD, label: 'Single Voice', icon: Mic },
+                  { id: SpeakingStyle.STORY, label: 'Story Mode', icon: MoonStar },
+                  { id: SpeakingStyle.PODCAST, label: 'Podcast Duo', icon: Users },
                   { id: SpeakingStyle.SINGING, label: 'Singing', icon: Music },
-                ].map((style) => (
-                  <button
-                    key={style.id}
-                    onClick={() => {
-                        setSpeakingStyle(style.id);
-                        if (style.id === SpeakingStyle.STORY) {
-                            setSelectedPairId('pair_male_boy');
-                        }
-                    }}
-                    className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
-                      speakingStyle === style.id
-                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-500/20'
-                        : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-600 hover:bg-slate-800'
-                    }`}
-                  >
-                    <style.icon size={20} className="mb-1" />
-                    <span className="text-xs font-medium">{style.label}</span>
+                ].map(s => (
+                  <button key={s.id} onClick={() => setSpeakingStyle(s.id)} className={`flex flex-col items-center p-3 rounded-xl border transition-all ${speakingStyle === s.id ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800'}`}>
+                    <s.icon size={20} className="mb-1" />
+                    <span className="text-[10px] font-bold">{s.label}</span>
                   </button>
                 ))}
               </div>
             </section>
 
-            {speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY ? (
-              /* PODCAST/STORY SETTINGS */
-              <section className="animate-fade-in">
-                
-                {/* Aspect Ratio Selector for Story Mode */}
-                {speakingStyle === SpeakingStyle.STORY && (
-                    <div className="mb-4 bg-slate-900 rounded-xl p-3 border border-slate-700">
-                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Video Aspect Ratio</h3>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setAspectRatio("9:16")}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                                    aspectRatio === "9:16" 
-                                    ? 'bg-indigo-600 text-white shadow-md' 
-                                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
-                                }`}
-                            >
-                                <Smartphone size={14} /> Portrait (Shorts)
-                            </button>
-                            <button
-                                onClick={() => setAspectRatio("16:9")}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                                    aspectRatio === "16:9" 
-                                    ? 'bg-indigo-600 text-white shadow-md' 
-                                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
-                                }`}
-                            >
-                                <Monitor size={14} /> Landscape
-                            </button>
-                        </div>
+            {speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.PODCAST ? (
+              <section className="animate-fade-in space-y-4">
+                 <div className="flex items-center justify-between">
+                    <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Select Duo</h3>
+                    <div className="flex bg-slate-700 rounded-lg p-0.5">
+                       <button onClick={() => setPodcastLang('ENGLISH')} className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${podcastLang === 'ENGLISH' ? 'bg-white text-slate-900' : 'text-slate-400'}`}>ENG</button>
+                       <button onClick={() => setPodcastLang('URDU')} className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${podcastLang === 'URDU' ? 'bg-green-600 text-white' : 'text-slate-400'}`}>URDU</button>
                     </div>
-                )}
-
-                <div className="flex items-center justify-between mb-3">
-                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                       {speakingStyle === SpeakingStyle.STORY ? 'Story Family & Language' : 'Podcast Duo & Language'}
-                   </h3>
-                   
-                   <div className="flex items-center bg-slate-700 rounded-lg p-0.5">
-                      <button 
-                        onClick={() => setPodcastLang('ENGLISH')}
-                        className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'ENGLISH' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}
-                      >
-                        ENG
-                      </button>
-                      <button 
-                        onClick={() => setPodcastLang('URDU')}
-                        className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'URDU' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                        title={speakingStyle === SpeakingStyle.STORY ? "Mix English + Roman Urdu for Desi Stories" : "Urdu Podcast"}
-                      >
-                        URDU
-                      </button>
-                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                   {filteredPairs.map(pair => (
-                     <button
-                        key={pair.id}
-                        onClick={() => setSelectedPairId(pair.id)}
-                        className={`w-full flex items-center p-3 rounded-xl border transition-all text-left group ${
-                          selectedPairId === pair.id
-                            ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300'
-                            : 'bg-slate-900 border-slate-700 hover:bg-slate-800 text-slate-300'
-                        }`}
-                     >
-                       <div className="flex-1">
-                          <div className="text-sm font-bold">{pair.name}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">{pair.description}</div>
-                          <div className="flex gap-2 mt-2">
-                             <span className="text-[10px] bg-slate-800 border border-slate-600 px-1.5 py-0.5 rounded text-slate-400">{pair.speaker1.label}</span>
-                             <span className="text-[10px] bg-slate-800 border border-slate-600 px-1.5 py-0.5 rounded text-slate-400">{pair.speaker2.label}</span>
-                          </div>
-                       </div>
+                 </div>
+                 <div className="space-y-2">
+                   {AVAILABLE_PODCAST_PAIRS.filter(p => speakingStyle !== SpeakingStyle.STORY || p.description.includes("Story")).map(p => (
+                     <button key={p.id} onClick={() => setSelectedPairId(p.id)} className={`w-full p-3 rounded-xl border text-left transition-all ${selectedPairId === p.id ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' : 'bg-slate-900 border-slate-700 text-slate-400'}`}>
+                        <div className="font-bold text-sm">{p.name}</div>
+                        <div className="text-[10px] opacity-60">{p.description}</div>
                      </button>
                    ))}
-                </div>
+                 </div>
               </section>
             ) : (
-              /* SINGLE VOICE SETTINGS */
-              <>
-                <section>
-                    <div className="flex justify-between items-center mb-3">
-                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Voice Persona</h3>
-                        <div className="relative">
-                            <input 
-                                type="file" 
-                                ref={fileInputRef} 
-                                className="hidden" 
-                                accept="audio/*,video/*"
-                                onChange={handleVoiceUpload}
-                            />
-                            <button 
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isAnalyzing}
-                                className="flex items-center gap-1.5 px-2 py-1 bg-slate-700 hover:bg-indigo-600 text-white text-[10px] font-bold uppercase rounded transition-colors"
-                            >
-                                {isAnalyzing ? <span className="animate-spin">⌛</span> : <Fingerprint size={12} />}
-                                {isAnalyzing ? 'Analyzing...' : 'Clone Voice'}
-                            </button>
-                        </div>
-                    </div>
-                  
-                  <div className="space-y-4">
-                    {(['MALE', 'FEMALE', 'CHILD'] as VoiceGender[]).map((category) => {
-                      const voices = groupedVoices[category];
-                      if (!voices.length) return null;
-                      
-                      let label = '';
-                      let icon = null;
-                      if (category === VoiceGender.CHILD) { label = 'Kids'; icon = <Smile size={14} className="text-yellow-400" />; }
-                      if (category === VoiceGender.FEMALE) { label = 'Women'; icon = <User size={14} className="text-pink-400" />; }
-                      if (category === VoiceGender.MALE) { label = 'Men'; icon = <User size={14} className="text-blue-400" />; }
-
-                      return (
-                        <div key={category}>
-                          <div className="flex items-center gap-2 mb-2 px-1">
-                            {icon}
-                            <span className="text-xs font-medium text-slate-400">{label}</span>
-                          </div>
-                          <div className="space-y-1">
-                            {voices.map((voice) => (
-                              <button
-                                key={voice.id}
-                                onClick={() => handleVoiceSelect(voice)}
-                                className={`w-full flex items-center p-2 rounded-lg border transition-all text-left group ${
-                                  selectedVoiceId === voice.id
-                                    ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-300'
-                                    : 'bg-transparent border-transparent hover:bg-slate-700/50 text-slate-300'
-                                }`}
-                              >
-                                <div className={`w-2 h-2 rounded-full mr-3 shrink-0 ${
-                                  selectedVoiceId === voice.id ? 'bg-indigo-400' : 'bg-slate-600'
-                                } ${voice.isCloned ? 'animate-pulse' : ''}`} />
-                                <div className="flex-1">
-                                  <div className="text-sm font-medium flex items-center gap-2">
-                                    {voice.name}
-                                    {voice.isUrdu && <span className="text-[9px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded uppercase tracking-wider">Urdu</span>}
-                                    {voice.isCloned && <span className="text-[9px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded uppercase tracking-wider">Clone</span>}
-                                  </div>
-                                  <div className="text-[10px] text-slate-500 truncate max-w-[180px]">{voice.description}</div>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-
-                {/* Pitch Control */}
-                <section>
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Pitch Shift</h3>
-                    <span className={`text-xs font-mono px-2 py-0.5 rounded ${pitch !== 0 ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-700 text-slate-400'}`}>
-                      {pitch > 0 ? '+' : ''}{pitch}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-1200"
-                    max="1200"
-                    step="50"
-                    value={pitch}
-                    onChange={(e) => setPitch(Number(e.target.value))}
-                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                  />
-                  <div className="flex justify-between text-[10px] text-slate-600 mt-1 font-medium">
-                    <span>Deep</span>
-                    <span>Natural</span>
-                    <span>High</span>
-                  </div>
-                </section>
-              </>
+              <section className="space-y-6">
+                 {/* Voice Upload */}
+                 <div className="flex justify-between items-center bg-slate-900/50 p-3 rounded-xl border border-slate-700">
+                    <span className="text-[10px] font-bold text-slate-400">Clone Custom Voice</span>
+                    <input type="file" ref={fileInputRef} className="hidden" onChange={handleVoiceUpload} />
+                    <button onClick={() => fileInputRef.current?.click()} className="px-3 py-1 bg-indigo-600 rounded text-[10px] font-bold text-white flex items-center gap-1">
+                       {isAnalyzing ? <RefreshCw size={12} className="animate-spin" /> : <Fingerprint size={12}/>} Clone
+                    </button>
+                 </div>
+                 {/* Voice Lists */}
+                 {(['MALE', 'FEMALE', 'CHILD'] as VoiceGender[]).map(cat => (
+                   <div key={cat} className="space-y-2">
+                      <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest px-1">{cat}</h4>
+                      {grouped[cat].map(v => (
+                        <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setPitch(v.recommendedPitch); }} className={`w-full p-2 rounded-lg border text-left flex items-center gap-3 ${selectedVoiceId === v.id ? 'bg-indigo-600/10 border-indigo-500 text-indigo-300' : 'bg-transparent border-transparent text-slate-400'}`}>
+                           <div className={`w-2 h-2 rounded-full ${selectedVoiceId === v.id ? 'bg-indigo-400' : 'bg-slate-700'}`} />
+                           <div className="flex-1">
+                              <div className="text-xs font-bold">{v.name}</div>
+                              <div className="text-[9px] opacity-50 truncate">{v.description}</div>
+                           </div>
+                        </button>
+                      ))}
+                   </div>
+                 ))}
+              </section>
             )}
-
           </div>
         </div>
       </div>
 
-      {/* RIGHT AREA - WORKSPACE */}
+      {/* Editor & Results Area */}
       <div className="lg:col-span-8 flex flex-col gap-4 h-full">
-        
         {/* Editor */}
-        <div className="flex-1 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl flex flex-col relative overflow-hidden">
-          <div className="flex justify-between items-center mb-4">
-            <label className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-               <span>Script Editor</span>
-               <span className="text-xs font-normal text-slate-500 border-l border-slate-600 pl-2 ml-2">{text.length} chars</span>
-            </label>
-            
-            <div className="flex gap-2">
-               {/* Auto-Polish Toggle */}
-               <button 
-                  onClick={() => setIsEnhancementEnabled(!isEnhancementEnabled)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                      isEnhancementEnabled 
-                      ? 'bg-green-600/20 border-green-500/50 text-green-300' 
-                      : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600'
-                  }`}
-                  title="Automatically improves grammar, punctuation, and flow before generating audio."
-               >
-                  <CheckCircle2 size={14} className={isEnhancementEnabled ? 'text-green-400' : 'text-slate-500'} />
-                  Auto-Improve Script
-               </button>
-
-              {(speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY) && (
-                  <button 
-                  onClick={handleGenerateScript}
-                  disabled={isProcessingScript || !text}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors border border-indigo-500 shadow-lg shadow-indigo-500/20 disabled:opacity-50"
-                >
-                  {isProcessingScript ? (
-                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  ) : (
-                    <Sparkles size={14} />
-                  )}
-                  {speakingStyle === SpeakingStyle.STORY ? 'Magic Story Writer' : 'Auto-Script'}
-                </button>
-              )}
-              
-              <button 
-                onClick={handleTranslate}
-                disabled={isTranslating || !text || speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                    speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.STORY
-                    ? 'opacity-0 pointer-events-none' 
-                    : 'bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600'
-                }`}
-              >
-                {isTranslating ? (
-                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : (
-                  <Globe size={14} />
-                )}
-                Translate to Urdu
-              </button>
-            </div>
-          </div>
-          
-          <div className="flex gap-6 h-full">
-            <textarea
-                className={`flex-1 w-full bg-slate-900/50 border border-slate-700 rounded-xl p-6 text-lg text-slate-100 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none resize-none transition-all placeholder-slate-600 leading-relaxed ${
-                currentVoice?.isUrdu || podcastLang === 'URDU' ? 'text-right font-[Inter]' : ''
-                }`}
-                style={{ direction: currentVoice?.isUrdu || (speakingStyle === SpeakingStyle.PODCAST && podcastLang === 'URDU') ? 'rtl' : 'ltr' }}
-                placeholder={
-                speakingStyle === SpeakingStyle.STORY ? `Enter a story topic (e.g., 'A rabbit who wanted to fly').\n\nClick "Magic Story Writer" to generate a full bilingual dialogue!` :
-                speakingStyle === SpeakingStyle.PODCAST ? `Enter a topic...\n\nExample Format:\n${currentPair?.speaker1.name}: Hello there!\n${currentPair?.speaker2.name}: Hi! How are you?\n\n(Or just click 'Auto-Script' to convert raw text)` :
-                speakingStyle === SpeakingStyle.FICTION ? "Once upon a time, in a land far away..." :
-                "Enter your text here..."
-                }
+        <div className="flex-1 bg-slate-800 rounded-2xl border border-slate-700 p-6 flex flex-col shadow-2xl relative overflow-hidden">
+           <div className="flex justify-between items-center mb-4">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2"><FileText size={14}/> Script Editor</label>
+              <div className="flex gap-2">
+                 {(speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.PODCAST) && (
+                   <button onClick={handleGenerateScript} disabled={isProcessingScript || !text} className="px-3 py-1.5 bg-indigo-600 rounded-lg text-[10px] font-bold text-white flex items-center gap-2 disabled:opacity-50">
+                     {isProcessingScript ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12}/>} AI Write Script
+                   </button>
+                 )}
+                 <button onClick={handleTranslate} className="px-3 py-1.5 bg-slate-700 rounded-lg text-[10px] font-bold text-slate-300 flex items-center gap-2">
+                   <Globe size={12}/> Translate
+                 </button>
+              </div>
+           </div>
+           
+           <div className="flex gap-4 h-full">
+              <textarea 
+                className={`flex-1 bg-slate-900 border border-slate-700 rounded-xl p-6 text-slate-200 text-lg focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none placeholder-slate-600 ${podcastLang === 'URDU' ? 'text-right' : ''}`}
+                placeholder="Enter text or use AI script writer..."
                 value={text}
-                onChange={(e) => setText(e.target.value)}
-            />
-            
-            {/* Story Image Preview Panel */}
-            {speakingStyle === SpeakingStyle.STORY && (storyImageUrl || isGeneratingImage) && (
-                <div className="w-1/3 flex flex-col gap-2 animate-fade-in">
-                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                        <ImageIcon size={14} /> Story Art (Pixar Style)
+                onChange={e => setText(e.target.value)}
+              />
+              {speakingStyle === SpeakingStyle.STORY && (storyImageUrl || isGeneratingImage) && (
+                 <div className="w-1/3 flex flex-col gap-3 animate-fade-in">
+                    <div className="flex-1 bg-slate-900 rounded-xl border border-slate-700 relative overflow-hidden group">
+                       {storyImageUrl ? <img src={storyImageUrl} className="w-full h-full object-cover" /> : (
+                         <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600">
+                           <RefreshCw size={24} className="animate-spin mb-2" />
+                           <span className="text-[10px]">Creating Art...</span>
+                         </div>
+                       )}
                     </div>
-                    <div className="flex-1 bg-slate-900 rounded-xl border border-slate-700 overflow-hidden relative">
-                         {storyImageUrl ? (
-                             <img src={storyImageUrl} className="w-full h-full object-cover" alt="Generated Story Art" />
-                         ) : (
-                             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
-                                 <div className="w-8 h-8 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mb-2"></div>
-                                 <span className="text-xs">Generating Art...</span>
-                             </div>
-                         )}
-                         {storyTitle && !isGeneratingImage && (
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm p-2 text-center">
-                                <span className="text-xs font-bold text-white line-clamp-2">{storyTitle}</span>
-                            </div>
-                         )}
-                    </div>
-                    {storyImageUrl && audioBuffer && (
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={handleDownloadStoryVideo}
-                                className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
-                            >
-                                <Video size={14} /> Video
-                            </button>
-                            <button 
-                                onClick={handleDownloadThumbnail}
-                                className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
-                            >
-                                <ImageIcon size={14} /> JPG
-                            </button>
-                        </div>
+                    {storyImageUrl && (
+                      <div className="flex gap-2">
+                         <button onClick={handleDownloadStoryVideo} className="flex-1 py-2 bg-red-600 rounded-lg text-[10px] font-bold text-white flex items-center justify-center gap-2"><Video size={14}/> Video</button>
+                         <button onClick={handleDownloadThumbnail} className="flex-1 py-2 bg-slate-700 rounded-lg text-[10px] font-bold text-slate-300 flex items-center justify-center gap-2"><ImageIcon size={14}/> JPG</button>
+                      </div>
                     )}
-                </div>
-            )}
-          </div>
+                 </div>
+              )}
+           </div>
 
-          <div className="mt-6 flex justify-end">
-             <button
-              onClick={handleGenerate}
-              disabled={isLoading || !text}
-              className={`flex items-center gap-3 px-8 py-4 rounded-xl font-bold text-lg transition-all transform active:scale-95 ${
-                isLoading || !text 
-                  ? 'bg-slate-700 text-slate-500 cursor-not-allowed' 
-                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-xl shadow-indigo-500/25 ring-1 ring-white/10'
-              }`}
-             >
-               {isLoading ? (
-                 <>
-                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                   <span>{isEnhancementEnabled ? 'Enhancing & Generating...' : 'Generating Audio...'}</span>
-                 </>
-               ) : (
-                 <>
-                   <Wand2 size={20} />
-                   <span>{speakingStyle === SpeakingStyle.STORY ? 'Generate Audio & Art' : 'Generate Voice Over'}</span>
-                 </>
-               )}
-             </button>
-          </div>
+           <div className="mt-6 flex justify-end">
+              <button onClick={handleGenerate} disabled={isLoading || !text} className="px-10 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl text-white font-bold text-lg shadow-xl shadow-indigo-500/20 flex items-center gap-3 transform active:scale-95 transition-all">
+                {isLoading ? <RefreshCw size={24} className="animate-spin" /> : <Wand2 size={24}/>}
+                {isLoading ? 'Generating Audio...' : 'Generate Voiceover'}
+              </button>
+           </div>
         </div>
 
         {/* Player Bar */}
-        <div className={`bg-slate-900 rounded-2xl border border-slate-800 p-4 flex items-center gap-4 transition-all duration-500 ${audioBuffer ? 'opacity-100 translate-y-0' : 'opacity-50 translate-y-4 pointer-events-none'}`}>
-             <button 
-                  onClick={togglePlayback}
-                  className="w-14 h-14 flex items-center justify-center rounded-full bg-white text-slate-950 hover:scale-105 transition-all shadow-lg shadow-white/10 shrink-0"
-                >
-                  {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
-            </button>
-            
-            <div className="flex-1 overflow-hidden">
-                <div className="flex items-baseline justify-between mb-1">
-                  <h3 className="font-semibold text-slate-200 truncate flex items-center gap-2">
-                    {speakingStyle === SpeakingStyle.STORY ? (
-                        <><MoonStar size={14} className="text-yellow-400" /> Bedtime Story: {currentPair?.name}</>
-                    ) : speakingStyle === SpeakingStyle.PODCAST ? (
-                        <><Users size={14} className="text-purple-400" /> Podcast: {currentPair?.name}</>
-                    ) : (
-                        <>{speakingStyle === SpeakingStyle.FICTION ? 'Story' : speakingStyle === SpeakingStyle.SINGING ? 'Song' : 'Speech'} Audio</>
-                    )}
-                     
-                     {(currentVoice?.isUrdu || (speakingStyle === SpeakingStyle.PODCAST && podcastLang === 'URDU')) && <span className="text-[10px] bg-green-900 text-green-300 px-1.5 rounded border border-green-800">Urdu</span>}
-                     {currentVoice?.isCloned && <span className="text-[10px] bg-purple-900 text-purple-300 px-1.5 rounded border border-purple-800">Cloned</span>}
-                  </h3>
-                  <span className="text-xs text-indigo-400 font-mono">
-                    {audioBuffer ? `${audioBuffer.duration.toFixed(1)}s` : '--:--'}
-                  </span>
-                </div>
-                {/* Mock Waveform Visualization */}
-                <div className="h-8 flex items-center gap-0.5 opacity-50">
-                  {Array.from({ length: 40 }).map((_, i) => (
-                    <div 
-                      key={i} 
-                      className="flex-1 bg-indigo-500 rounded-full transition-all duration-300"
-                      style={{ 
-                        height: isPlaying ? `${Math.random() * 100}%` : '20%',
-                        opacity: isPlaying ? 1 : 0.3
-                      }} 
-                    />
-                  ))}
-                </div>
-            </div>
-
-            <div className="h-10 w-px bg-slate-800 mx-2"></div>
-
-            <button 
-              onClick={handleDownload}
-              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition-colors font-medium shrink-0"
-            >
-              <Download size={18} />
-              <span>Save WAV</span>
-            </button>
+        <div className={`bg-slate-900 rounded-2xl border border-slate-800 p-4 flex items-center gap-4 transition-all duration-500 ${audioBuffer ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}`}>
+           <button onClick={togglePlayback} className="w-14 h-14 bg-white text-slate-950 rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-all">
+             {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
+           </button>
+           <div className="flex-1">
+              <div className="flex justify-between items-baseline mb-1">
+                 <h3 className="text-sm font-bold text-slate-200">Result Audio</h3>
+                 <span className="text-xs font-mono text-indigo-400">{audioBuffer?.duration.toFixed(1)}s</span>
+              </div>
+              <div className="h-6 flex items-center gap-0.5 opacity-30">
+                {Array.from({length: 50}).map((_, i) => <div key={i} className="flex-1 bg-indigo-500 rounded-full" style={{height: isPlaying ? `${Math.random()*100}%` : '20%'}} />)}
+              </div>
+           </div>
+           <button onClick={handleDownload} className="px-6 py-3 bg-slate-800 rounded-xl text-white text-sm font-bold flex items-center gap-2"><Download size={18}/> WAV</button>
         </div>
 
         {/* YouTube Metadata Section */}
-        {youtubeMeta && speakingStyle === SpeakingStyle.STORY && (
-            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 animate-fade-in-up">
-                <div className="flex items-center gap-2 mb-4 border-b border-slate-800 pb-3">
-                    <Youtube className="text-red-500" size={24} />
-                    <h3 className="text-lg font-bold text-white">YouTube Metadata</h3>
-                    <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded ml-2">SEO Optimized</span>
+        {youtubeMeta && (
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 animate-fade-in">
+                <div className="flex items-center gap-2 mb-6 border-b border-slate-800 pb-3">
+                    <Youtube className="text-red-500" size={20} />
+                    <h3 className="text-sm font-bold text-white uppercase tracking-widest">YouTube SEO Metadata</h3>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                        <div>
-                            <div className="flex justify-between items-center mb-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Video Title</label>
-                                <button onClick={() => copyToClipboard(youtubeMeta.title)} className="text-indigo-400 hover:text-white"><Copy size={12} /></button>
-                            </div>
-                            <div className="bg-slate-950 p-3 rounded-lg text-sm text-slate-200 border border-slate-800">
-                                {youtubeMeta.title}
-                            </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2 space-y-4">
+                        <div className="bg-slate-950 rounded-xl p-4 border border-slate-800">
+                           <div className="flex justify-between items-center mb-2">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">Video Title</span>
+                              <button onClick={() => copyToClipboard(youtubeMeta.title)} className="text-indigo-400 hover:text-white"><Copy size={12}/></button>
+                           </div>
+                           <p className="text-sm text-white font-medium">{youtubeMeta.title}</p>
                         </div>
-                        <div>
-                            <div className="flex justify-between items-center mb-1">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Description</label>
-                                <button onClick={() => copyToClipboard(youtubeMeta.description)} className="text-indigo-400 hover:text-white"><Copy size={12} /></button>
-                            </div>
-                            <div className="bg-slate-950 p-3 rounded-lg text-sm text-slate-300 border border-slate-800 h-24 overflow-y-auto">
-                                {youtubeMeta.description}
-                            </div>
+                        <div className="bg-slate-950 rounded-xl p-4 border border-slate-800">
+                           <div className="flex justify-between items-center mb-2">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">Description</span>
+                              <button onClick={() => copyToClipboard(youtubeMeta.description)} className="text-indigo-400 hover:text-white"><Copy size={12}/></button>
+                           </div>
+                           <p className="text-xs text-slate-400 leading-relaxed h-20 overflow-y-auto">{youtubeMeta.description}</p>
                         </div>
                     </div>
-                    
-                    <div>
-                        <div className="flex justify-between items-center mb-1">
-                             <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><Hash size={12}/> Tags (Comma Separated)</label>
-                             <button onClick={() => copyToClipboard(youtubeMeta.tags)} className="text-indigo-400 hover:text-white"><Copy size={12} /></button>
+                    <div className="bg-slate-950 rounded-xl p-4 border border-slate-800 flex flex-col">
+                        <div className="flex justify-between items-center mb-2">
+                           <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1"><Hash size={12}/> SEO Tags</span>
+                           <button onClick={() => copyToClipboard(youtubeMeta.tags)} className="text-indigo-400 hover:text-white"><Copy size={12}/></button>
                         </div>
-                        <div className="bg-slate-950 p-3 rounded-lg text-xs text-slate-400 border border-slate-800 h-[170px] overflow-y-auto font-mono leading-relaxed">
-                            {youtubeMeta.tags}
+                        <div className="flex-1 text-[10px] text-slate-500 font-mono leading-relaxed h-32 overflow-y-auto italic">
+                           {youtubeMeta.tags}
                         </div>
                     </div>
                 </div>
             </div>
         )}
-
       </div>
     </div>
   );
