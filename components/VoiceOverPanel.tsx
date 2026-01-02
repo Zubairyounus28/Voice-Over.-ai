@@ -2,12 +2,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Download, Wand2, Mic, Volume2, Music, User, Smile, BookOpen, Newspaper, MessageSquare, Settings2, Languages, Globe, Users, PenTool, Sparkles, Upload, Fingerprint, CheckCircle2, MoonStar, Image as ImageIcon, Video, Monitor, Smartphone, Youtube, Hash, Copy, FileText, Check, RefreshCw } from 'lucide-react';
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, VoiceOption, PodcastPair, VoiceGender, SpeakingStyle } from '../types';
-import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, analyzeVoiceSample, optimizeScriptForSpeech, generateStoryImage, generateStoryTitle, generateYouTubeMetadata } from '../services/geminiService';
+import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, generateSoloStoryScript, analyzeVoiceSample, optimizeScriptForSpeech, generateStoryImage, generateStoryTitle, generateYouTubeMetadata } from '../services/geminiService';
 import { decodeBase64, decodeAudioData, audioBufferToWav, fileToBase64 } from '../utils/audioUtils';
 
 export const VoiceOverPanel: React.FC = () => {
   const [text, setText] = useState<string>('');
-  const [selectedVoiceId, setSelectedVoiceId] = useState<string>(AVAILABLE_VOICES[1].id);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>(AVAILABLE_VOICES[0].id);
   const [selectedPairId, setSelectedPairId] = useState<string>(AVAILABLE_PODCAST_PAIRS[0].id);
   const [pitch, setPitch] = useState<number>(0); 
   const [speakingStyle, setSpeakingStyle] = useState<SpeakingStyle>(SpeakingStyle.STANDARD);
@@ -61,7 +61,7 @@ export const VoiceOverPanel: React.FC = () => {
 
     try {
       let finalText = text;
-      if (isEnhancementEnabled && speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY) {
+      if (isEnhancementEnabled && speakingStyle !== SpeakingStyle.PODCAST && speakingStyle !== SpeakingStyle.STORY && speakingStyle !== SpeakingStyle.SOLO_STORY) {
          finalText = await optimizeScriptForSpeech(text);
          setText(finalText);
       }
@@ -74,7 +74,7 @@ export const VoiceOverPanel: React.FC = () => {
          generateSpeech(finalText, idToUse, speakingStyle, customVoice)
       ];
 
-      if (speakingStyle === SpeakingStyle.STORY) {
+      if (speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.SOLO_STORY) {
          setIsGeneratingImage(true);
          promises.push(generateStoryImage(finalText, aspectRatio).catch(() => null));
          promises.push(generateStoryTitle(finalText).catch(() => "Story"));
@@ -90,7 +90,7 @@ export const VoiceOverPanel: React.FC = () => {
         setAudioBuffer(decodedBuffer);
       }
 
-      if (speakingStyle === SpeakingStyle.STORY) {
+      if (speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.SOLO_STORY) {
           if (results[1]) setStoryImageUrl(`data:image/png;base64,${results[1]}`);
           if (results[2]) setStoryTitle(results[2]);
           if (results[3]) setYoutubeMeta(results[3]);
@@ -118,9 +118,14 @@ export const VoiceOverPanel: React.FC = () => {
       if (!text.trim()) return;
       setIsProcessingScript(true);
       try {
-          const script = speakingStyle === SpeakingStyle.STORY 
-            ? await generateStoryScript(text, selectedPairId, podcastLang)
-            : await generatePodcastScript(text, selectedPairId, podcastLang);
+          let script = "";
+          if (speakingStyle === SpeakingStyle.SOLO_STORY) {
+            script = await generateSoloStoryScript(text, podcastLang);
+          } else if (speakingStyle === SpeakingStyle.STORY) {
+            script = await generateStoryScript(text, selectedPairId, podcastLang);
+          } else {
+            script = await generatePodcastScript(text, selectedPairId, podcastLang);
+          }
           setText(script);
       } finally {
           setIsProcessingScript(false);
@@ -175,7 +180,7 @@ export const VoiceOverPanel: React.FC = () => {
     const url = URL.createObjectURL(wavBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'voiceover.wav';
+    a.download = `${storyTitle || 'voiceover'}.wav`;
     a.click();
   };
 
@@ -219,7 +224,7 @@ export const VoiceOverPanel: React.FC = () => {
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `story.${mime.split('/')[1]}`;
+              a.download = `${storyTitle || 'story'}.${mime.split('/')[1]}`;
               a.click();
               setIsRenderingVideo(false);
           };
@@ -277,11 +282,11 @@ export const VoiceOverPanel: React.FC = () => {
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { id: SpeakingStyle.STANDARD, label: 'Single Voice', icon: Mic },
-                  { id: SpeakingStyle.STORY, label: 'Story Mode', icon: MoonStar },
+                  { id: SpeakingStyle.SOLO_STORY, label: 'Solo Story', icon: BookOpen },
+                  { id: SpeakingStyle.STORY, label: 'Story Duo', icon: MoonStar },
                   { id: SpeakingStyle.PODCAST, label: 'Podcast Duo', icon: Users },
-                  { id: SpeakingStyle.SINGING, label: 'Singing', icon: Music },
                 ].map(s => (
-                  <button key={s.id} onClick={() => setSpeakingStyle(s.id)} className={`flex flex-col items-center p-3 rounded-xl border transition-all ${speakingStyle === s.id ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800'}`}>
+                  <button key={s.id} onClick={() => setSpeakingStyle(s.id as SpeakingStyle)} className={`flex flex-col items-center p-3 rounded-xl border transition-all ${speakingStyle === s.id ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800'}`}>
                     <s.icon size={20} className="mb-1" />
                     <span className="text-[10px] font-bold">{s.label}</span>
                   </button>
@@ -299,7 +304,7 @@ export const VoiceOverPanel: React.FC = () => {
                     </div>
                  </div>
                  <div className="space-y-2">
-                   {AVAILABLE_PODCAST_PAIRS.filter(p => speakingStyle !== SpeakingStyle.STORY || p.description.includes("Story")).map(p => (
+                   {AVAILABLE_PODCAST_PAIRS.map(p => (
                      <button key={p.id} onClick={() => setSelectedPairId(p.id)} className={`w-full p-3 rounded-xl border text-left transition-all ${selectedPairId === p.id ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' : 'bg-slate-900 border-slate-700 text-slate-400'}`}>
                         <div className="font-bold text-sm">{p.name}</div>
                         <div className="text-[10px] opacity-60">{p.description}</div>
@@ -318,18 +323,25 @@ export const VoiceOverPanel: React.FC = () => {
                     </button>
                  </div>
                  {/* Voice Lists */}
-                 {(['MALE', 'FEMALE', 'CHILD'] as VoiceGender[]).map(cat => (
+                 {(['CHILD', 'FEMALE', 'MALE'] as VoiceGender[]).map(cat => (
                    <div key={cat} className="space-y-2">
-                      <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest px-1">{cat}</h4>
-                      {grouped[cat].map(v => (
-                        <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setPitch(v.recommendedPitch); }} className={`w-full p-2 rounded-lg border text-left flex items-center gap-3 ${selectedVoiceId === v.id ? 'bg-indigo-600/10 border-indigo-500 text-indigo-300' : 'bg-transparent border-transparent text-slate-400'}`}>
-                           <div className={`w-2 h-2 rounded-full ${selectedVoiceId === v.id ? 'bg-indigo-400' : 'bg-slate-700'}`} />
-                           <div className="flex-1">
-                              <div className="text-xs font-bold">{v.name}</div>
-                              <div className="text-[9px] opacity-50 truncate">{v.description}</div>
-                           </div>
-                        </button>
-                      ))}
+                      <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest px-1 flex items-center gap-2">
+                         {cat === 'CHILD' && <Smile size={12} className="text-orange-400"/>}
+                         {cat === 'FEMALE' && <User size={12} className="text-pink-400"/>}
+                         {cat === 'MALE' && <User size={12} className="text-blue-400"/>}
+                         {cat}
+                      </h4>
+                      <div className="grid grid-cols-1 gap-1">
+                        {grouped[cat].map(v => (
+                          <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setPitch(v.recommendedPitch); }} className={`w-full p-2 rounded-lg border text-left flex items-center gap-3 ${selectedVoiceId === v.id ? 'bg-indigo-600/10 border-indigo-500 text-indigo-300' : 'bg-transparent border-transparent text-slate-400 hover:bg-slate-900'}`}>
+                             <div className={`w-2 h-2 rounded-full ${selectedVoiceId === v.id ? 'bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.8)]' : 'bg-slate-700'}`} />
+                             <div className="flex-1">
+                                <div className="text-xs font-bold">{v.name}</div>
+                                <div className="text-[9px] opacity-50 truncate">{v.description}</div>
+                             </div>
+                          </button>
+                        ))}
+                      </div>
                    </div>
                  ))}
               </section>
@@ -345,9 +357,9 @@ export const VoiceOverPanel: React.FC = () => {
            <div className="flex justify-between items-center mb-4">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2"><FileText size={14}/> Script Editor</label>
               <div className="flex gap-2">
-                 {(speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.PODCAST) && (
+                 {(speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.SOLO_STORY) && (
                    <button onClick={handleGenerateScript} disabled={isProcessingScript || !text} className="px-3 py-1.5 bg-indigo-600 rounded-lg text-[10px] font-bold text-white flex items-center gap-2 disabled:opacity-50">
-                     {isProcessingScript ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12}/>} AI Write Script
+                     {isProcessingScript ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12}/>} AI Write {speakingStyle === SpeakingStyle.SOLO_STORY ? 'Story' : 'Script'}
                    </button>
                  )}
                  <button onClick={handleTranslate} className="px-3 py-1.5 bg-slate-700 rounded-lg text-[10px] font-bold text-slate-300 flex items-center gap-2">
@@ -363,7 +375,7 @@ export const VoiceOverPanel: React.FC = () => {
                 value={text}
                 onChange={e => setText(e.target.value)}
               />
-              {speakingStyle === SpeakingStyle.STORY && (storyImageUrl || isGeneratingImage) && (
+              {(speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.SOLO_STORY) && (storyImageUrl || isGeneratingImage) && (
                  <div className="w-1/3 flex flex-col gap-3 animate-fade-in">
                     <div className="flex-1 bg-slate-900 rounded-xl border border-slate-700 relative overflow-hidden group">
                        {storyImageUrl ? <img src={storyImageUrl} className="w-full h-full object-cover" /> : (
@@ -374,9 +386,9 @@ export const VoiceOverPanel: React.FC = () => {
                        )}
                     </div>
                     {storyImageUrl && (
-                      <div className="flex gap-2">
-                         <button onClick={handleDownloadStoryVideo} className="flex-1 py-2 bg-red-600 rounded-lg text-[10px] font-bold text-white flex items-center justify-center gap-2"><Video size={14}/> Video</button>
-                         <button onClick={handleDownloadThumbnail} className="flex-1 py-2 bg-slate-700 rounded-lg text-[10px] font-bold text-slate-300 flex items-center justify-center gap-2"><ImageIcon size={14}/> JPG</button>
+                      <div className="flex flex-col gap-2">
+                         <button onClick={handleDownloadStoryVideo} className="w-full py-2.5 bg-red-600 hover:bg-red-500 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"><Video size={14}/> Save as Video</button>
+                         <button onClick={handleDownloadThumbnail} className="w-full py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-slate-300 flex items-center justify-center gap-2 transition-all active:scale-95"><ImageIcon size={14}/> Save Artwork</button>
                       </div>
                     )}
                  </div>
@@ -405,7 +417,9 @@ export const VoiceOverPanel: React.FC = () => {
                 {Array.from({length: 50}).map((_, i) => <div key={i} className="flex-1 bg-indigo-500 rounded-full" style={{height: isPlaying ? `${Math.random()*100}%` : '20%'}} />)}
               </div>
            </div>
-           <button onClick={handleDownload} className="px-6 py-3 bg-slate-800 rounded-xl text-white text-sm font-bold flex items-center gap-2"><Download size={18}/> WAV</button>
+           <button onClick={handleDownload} className="px-8 py-4 bg-green-600 hover:bg-green-500 rounded-xl text-white text-base font-bold flex items-center gap-2 shadow-lg shadow-green-500/20 transition-all active:scale-95">
+             <Download size={20}/> Download WAV
+           </button>
         </div>
 
         {/* YouTube Metadata Section */}

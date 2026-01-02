@@ -123,9 +123,9 @@ export const generatePodcastScript = async (text: string, pairId: string, langua
  * Generates a Bedtime Story dialogue script.
  */
 export const generateStoryScript = async (text: string, pairId: string, language: 'ENGLISH' | 'URDU'): Promise<string> => {
-    const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[3]; 
+    const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[0]; 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Convert the following topic into a soothing bedtime story dialogue between ${pair.speaker1.name} (Adult) and ${pair.speaker2.name} (Child).
+    const prompt = `Convert the following topic into a soothing bedtime story dialogue between ${pair.speaker1.name} and ${pair.speaker2.name}.
     ${language === 'URDU' ? "Use natural Roman Urdu." : "Use beautiful English."}
     Format strictly as:
     ${pair.speaker1.name}: [Line]
@@ -142,6 +142,28 @@ export const generateStoryScript = async (text: string, pairId: string, language
         console.error("Story script generation error:", error);
         throw error;
     }
+};
+
+/**
+ * Generates a Solo Bedtime Story script.
+ */
+export const generateSoloStoryScript = async (text: string, language: 'ENGLISH' | 'URDU'): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const prompt = `Rewrite the following topic into a beautiful, engaging solo bedtime story narration for a child. 
+  ${language === 'URDU' ? "Use natural Roman Urdu." : "Use magical English."}
+  Make it descriptive, rhythmic, and soothing. 
+  Topic: ${text}`;
+
+  try {
+      const response = await ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: [{ parts: [{ text: prompt }] }],
+      });
+      return response.text?.trim() || "";
+  } catch (error) {
+      console.error("Solo story script generation error:", error);
+      throw error;
+  }
 };
 
 /**
@@ -287,7 +309,7 @@ export const generateSpeech = async (
 
   // Handle Multi-Speaker (Story/Podcast)
   if (style === SpeakingStyle.PODCAST || style === SpeakingStyle.STORY) {
-     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === voiceOrPairId) || AVAILABLE_PODCAST_PAIRS[3];
+     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === voiceOrPairId) || AVAILABLE_PODCAST_PAIRS[0];
      
      config.speechConfig = {
         multiSpeakerVoiceConfig: {
@@ -321,11 +343,16 @@ export const generateSpeech = async (
 
   } else {
       // Single Speaker
-      let voice = AVAILABLE_VOICES.find(v => v.id === voiceOrPairId) || customVoiceData || AVAILABLE_VOICES[1];
+      let voice = AVAILABLE_VOICES.find(v => v.id === voiceOrPairId) || customVoiceData || AVAILABLE_VOICES[0];
       config.speechConfig = {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: voice.geminiVoiceName } },
       };
-      finalPrompt = text;
+      
+      if (style === SpeakingStyle.SOLO_STORY) {
+          finalPrompt = `ACT AS A STORYTELLER. Speak in a soothing, expressive, and rhythmic way for a child's bedtime story. NARRATE: ${text}`;
+      } else {
+          finalPrompt = text;
+      }
   }
 
   try {

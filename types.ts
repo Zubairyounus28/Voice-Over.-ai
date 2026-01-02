@@ -12,6 +12,7 @@ export enum SpeakingStyle {
   SINGING = 'SINGING',
   PODCAST = 'PODCAST',
   STORY = 'STORY',
+  SOLO_STORY = 'SOLO_STORY',
 }
 
 export enum AppMode {
@@ -46,28 +47,42 @@ export interface PodcastPair {
 
 export const AVAILABLE_VOICES: VoiceOption[] = [
   // Men
+  { id: 'v_father_solo', name: 'Storyteller Father', gender: VoiceGender.MALE, description: 'Protective, warm, calm', geminiVoiceName: 'Fenrir', recommendedPitch: -100 },
   { id: 'v1', name: 'Deep Narrator', gender: VoiceGender.MALE, description: 'Authoritative, deep', geminiVoiceName: 'Fenrir', recommendedPitch: -200 },
-  { id: 'principal_male', name: 'Principal (Male)', gender: VoiceGender.MALE, description: 'Authoritative, age 60', geminiVoiceName: 'Fenrir', recommendedPitch: -150 },
-  { id: 'urdu_authority_male', name: 'Urdu Authority (Male)', gender: VoiceGender.MALE, description: 'Bold, Ad Style', geminiVoiceName: 'Fenrir', recommendedPitch: -100, isUrdu: true },
-  { id: 'urdu_pro_emotional', name: 'Urdu Emotional (Pro)', gender: VoiceGender.MALE, description: 'Natural, Heartfelt, Professional', geminiVoiceName: 'Fenrir', recommendedPitch: -60, isUrdu: true },
-  { id: 'urdu_wise_old', name: 'Urdu Wise Old Man', gender: VoiceGender.MALE, description: 'Relaxed, Elderly, Emotional', geminiVoiceName: 'Fenrir', recommendedPitch: -160, isUrdu: true },
-  { id: 'urdu_young_soft', name: 'Urdu Young Man', gender: VoiceGender.MALE, description: 'Soft, Relaxed, Emotional', geminiVoiceName: 'Puck', recommendedPitch: -30, isUrdu: true },
   { id: 'v2', name: 'Standard Man', gender: VoiceGender.MALE, description: 'Conversational, clear', geminiVoiceName: 'Puck', recommendedPitch: 0 },
   { id: 'v5', name: 'Energetic Man', gender: VoiceGender.MALE, description: 'Dynamic, lively', geminiVoiceName: 'Puck', recommendedPitch: 100 },
-  { id: 'urdu_1', name: 'Urdu Narrator', gender: VoiceGender.MALE, description: 'Pakistani Accent', geminiVoiceName: 'Puck', recommendedPitch: -50, isUrdu: true },
+  { id: 'urdu_authority_male', name: 'Urdu Authority (Male)', gender: VoiceGender.MALE, description: 'Bold, Ad Style', geminiVoiceName: 'Fenrir', recommendedPitch: -100, isUrdu: true },
+  { id: 'urdu_wise_old', name: 'Urdu Wise Old Man', gender: VoiceGender.MALE, description: 'Relaxed, Elderly', geminiVoiceName: 'Fenrir', recommendedPitch: -160, isUrdu: true },
   
   // Women
-  { id: 'principal_female', name: 'Principal (Female)', gender: VoiceGender.FEMALE, description: 'Strict, experienced', geminiVoiceName: 'Kore', recommendedPitch: -120 },
+  { id: 'v_mother_solo', name: 'Storyteller Mother', gender: VoiceGender.FEMALE, description: 'Gentle, nurturing, soothing', geminiVoiceName: 'Kore', recommendedPitch: 0 },
   { id: 'v3', name: 'Soft Woman', gender: VoiceGender.FEMALE, description: 'Calm, soothing', geminiVoiceName: 'Kore', recommendedPitch: 0 },
   { id: 'v4', name: 'Energetic Woman', gender: VoiceGender.FEMALE, description: 'Bright, fast', geminiVoiceName: 'Zephyr', recommendedPitch: 0 },
+  { id: 'principal_female', name: 'Senior Woman', gender: VoiceGender.FEMALE, description: 'Wise, experienced', geminiVoiceName: 'Kore', recommendedPitch: -120 },
   
   // Kids
-  { id: 'v6', name: 'Energetic Boy', gender: VoiceGender.CHILD, description: 'Excited, high energy', geminiVoiceName: 'Puck', recommendedPitch: 450 },
+  { id: 'v6', name: 'Playful Boy', gender: VoiceGender.CHILD, description: 'Excited, high energy', geminiVoiceName: 'Puck', recommendedPitch: 450 },
   { id: 'v7', name: 'Standard Boy', gender: VoiceGender.CHILD, description: 'Casual, young', geminiVoiceName: 'Puck', recommendedPitch: 300 },
   { id: 'v8', name: 'Baby Girl', gender: VoiceGender.CHILD, description: 'Cute, toddler', geminiVoiceName: 'Kore', recommendedPitch: 600 },
+  { id: 'v_girl_happy', name: 'Little Princess', gender: VoiceGender.CHILD, description: 'Happy, sweet', geminiVoiceName: 'Kore', recommendedPitch: 550 },
+  { id: 'v_boy_curious', name: 'Curious Explorer', gender: VoiceGender.CHILD, description: 'Inquisitive, young', geminiVoiceName: 'Puck', recommendedPitch: 350 },
 ];
 
 export const AVAILABLE_PODCAST_PAIRS: PodcastPair[] = [
+  {
+    id: 'pair_single_mother',
+    name: 'Single Mother & Child',
+    description: 'Nurturing storytelling duo',
+    speaker1: { name: 'Mom', voiceName: 'Kore', label: 'Mother' },
+    speaker2: { name: 'Kid', voiceName: 'Zephyr', label: 'Child' }
+  },
+  {
+    id: 'pair_single_father',
+    name: 'Single Father & Child',
+    description: 'Adventure storytelling duo',
+    speaker1: { name: 'Dad', voiceName: 'Fenrir', label: 'Father' },
+    speaker2: { name: 'Kid', voiceName: 'Zephyr', label: 'Child' }
+  },
   {
     id: 'pair_male_female',
     name: 'Male & Female',
@@ -88,34 +103,6 @@ export const AVAILABLE_PODCAST_PAIRS: PodcastPair[] = [
     description: 'Soft & Energetic voices',
     speaker1: { name: 'Sarah', voiceName: 'Kore', label: 'Host 1 (Soft)' },
     speaker2: { name: 'Emily', voiceName: 'Zephyr', label: 'Host 2 (Lively)' }
-  },
-  {
-    id: 'pair_male_boy',
-    name: 'Father & Son',
-    description: 'Bedtime Story Mode',
-    speaker1: { name: 'Dad', voiceName: 'Fenrir', label: 'Father' },
-    speaker2: { name: 'Timmy', voiceName: 'Zephyr', label: 'Son' }
-  },
-  {
-    id: 'pair_father_daughter',
-    name: 'Father & Daughter',
-    description: 'Bedtime Story Mode',
-    speaker1: { name: 'Dad', voiceName: 'Fenrir', label: 'Father' },
-    speaker2: { name: 'Lily', voiceName: 'Zephyr', label: 'Daughter' }
-  },
-  {
-    id: 'pair_mother_son',
-    name: 'Mother & Son',
-    description: 'Bedtime Story Mode',
-    speaker1: { name: 'Mom', voiceName: 'Kore', label: 'Mother' },
-    speaker2: { name: 'Timmy', voiceName: 'Zephyr', label: 'Son' }
-  },
-  {
-    id: 'pair_female_girl',
-    name: 'Mother & Daughter',
-    description: 'Bedtime Story Mode',
-    speaker1: { name: 'Mom', voiceName: 'Kore', label: 'Mother' },
-    speaker2: { name: 'Lily', voiceName: 'Zephyr', label: 'Daughter' }
   }
 ];
 
