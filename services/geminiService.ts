@@ -317,7 +317,9 @@ export const generateSpeech = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = "gemini-2.5-flash-preview-tts";
   
-  let config: any = { responseModalities: [Modality.AUDIO] };
+  let config: any = { 
+    responseModalities: [Modality.AUDIO],
+  };
   let finalPrompt = text;
 
   // Handle Multi-Speaker (Story/Podcast)
@@ -339,20 +341,8 @@ export const generateSpeech = async (
         }
      };
 
-     if (style === SpeakingStyle.STORY) {
-        const parentRole = (pair.speaker1.name === 'Mom' || pair.speaker1.name === 'Mother') ? 'Mother' : 'Father';
-        const pDesc = parentRole === 'Father' ? 'Adult Male, Deep, Very Low Pitch, Mature' : 'Adult Female, Warm, Mature, Calm';
-        const cDesc = 'Child, Very High Pitch, Energetic, Small Boy/Girl Voice';
-
-        finalPrompt = `ACTORS:
-        1. ${pair.speaker1.name}: ${pDesc}.
-        2. ${pair.speaker2.name}: ${cDesc}.
-        
-        NARRATE DIALOGUE:
-        ${text}`;
-     } else {
-        finalPrompt = `TTS CONVERSATION:\n${text}`;
-     }
+     // The model needs an explicit command to perform TTS for the conversation
+     finalPrompt = `TTS the following conversation between ${pair.speaker1.name} and ${pair.speaker2.name}:\n\n${text}`;
 
   } else {
       // Single Speaker
@@ -361,10 +351,11 @@ export const generateSpeech = async (
           voiceConfig: { prebuiltVoiceConfig: { voiceName: voice.geminiVoiceName } },
       };
       
+      // Use "Say:" to explicitly trigger TTS audio generation
       if (style === SpeakingStyle.SOLO_STORY) {
-          finalPrompt = `ACT AS A STORYTELLER. Speak in a soothing, expressive, and rhythmic way for a child's bedtime story. NARRATE: ${text}`;
+          finalPrompt = `Say soothingly as a storyteller: ${text}`;
       } else {
-          finalPrompt = text;
+          finalPrompt = `Say: ${text}`;
       }
   }
 
@@ -372,7 +363,10 @@ export const generateSpeech = async (
     const response = await ai.models.generateContent({
       model: model,
       contents: [{ parts: [{ text: finalPrompt }] }],
-      config: config,
+      config: {
+        ...config,
+        systemInstruction: "You are a professional Text-to-Speech engine. Your only goal is to generate high-fidelity audio for the input provided. Do not provide any text explanations, descriptions, or conversation. Return ONLY audio data.",
+      },
     });
 
     const candidate = response.candidates?.[0];
@@ -382,7 +376,7 @@ export const generateSpeech = async (
     let audioData = null;
     let refusalText = "";
 
-    // Iterate through all parts to find audio data, as the model might return text + audio
+    // Iterate through all parts to find audio data
     for (const part of parts) {
       if (part.inlineData?.data) {
         audioData = part.inlineData.data;
@@ -393,12 +387,12 @@ export const generateSpeech = async (
 
     if (audioData) return audioData;
 
-    // If no audio was found, but text was returned, it's likely a safety refusal or error message
+    // Detailed error for text-only refusals
     if (refusalText) {
-        throw new Error(`AI Refusal: ${refusalText}`);
+        throw new Error(`AI Refusal: ${refusalText.substring(0, 100)}...`);
     }
 
-    throw new Error("No audio data returned from model.");
+    throw new Error("No audio data returned from model. The model might have returned an empty response or hit a safety filter.");
   } catch (error: any) {
     console.error("Speech Gen Error:", error);
     throw new Error(error.message || "Speech generation failed.");
