@@ -312,8 +312,9 @@ export const generateSpeech = async (
     text: string, 
     voiceOrPairId: string, 
     style: SpeakingStyle = SpeakingStyle.STANDARD,
-    customVoiceData?: any 
-) => {
+    customVoiceData?: any,
+    retries: number = 2
+): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = "gemini-2.5-flash-preview-tts";
   
@@ -341,8 +342,7 @@ export const generateSpeech = async (
         }
      };
 
-     // The model needs an explicit command to perform TTS for the conversation
-     finalPrompt = `TTS the following conversation between ${pair.speaker1.name} and ${pair.speaker2.name}:\n\n${text}`;
+     finalPrompt = `Perform the following conversation between ${pair.speaker1.name} and ${pair.speaker2.name} as audio:\n\n${text}`;
 
   } else {
       // Single Speaker
@@ -351,11 +351,11 @@ export const generateSpeech = async (
           voiceConfig: { prebuiltVoiceConfig: { voiceName: voice.geminiVoiceName } },
       };
       
-      // Use "Say:" to explicitly trigger TTS audio generation
+      // Keep prompt clean for single-speaker TTS
       if (style === SpeakingStyle.SOLO_STORY) {
-          finalPrompt = `Say soothingly as a storyteller: ${text}`;
+          finalPrompt = `Perform this story as a soothing storyteller: ${text}`;
       } else {
-          finalPrompt = `Say: ${text}`;
+          finalPrompt = text;
       }
   }
 
@@ -363,10 +363,7 @@ export const generateSpeech = async (
     const response = await ai.models.generateContent({
       model: model,
       contents: [{ parts: [{ text: finalPrompt }] }],
-      config: {
-        ...config,
-        systemInstruction: "You are a professional Text-to-Speech engine. Your only goal is to generate high-fidelity audio for the input provided. Do not provide any text explanations, descriptions, or conversation. Return ONLY audio data.",
-      },
+      config: config, // GUIDELINE: Do not use systemInstruction for TTS unless necessary, can cause 500s
     });
 
     const candidate = response.candidates?.[0];
@@ -387,13 +384,20 @@ export const generateSpeech = async (
 
     if (audioData) return audioData;
 
-    // Detailed error for text-only refusals
     if (refusalText) {
         throw new Error(`AI Refusal: ${refusalText.substring(0, 100)}...`);
     }
 
-    throw new Error("No audio data returned from model. The model might have returned an empty response or hit a safety filter.");
+    throw new Error("No audio data returned.");
   } catch (error: any) {
+    // Retry logic for 500 errors or transient issues
+    if (retries > 0 && (error.message?.includes("500") || error.message?.includes("INTERNAL") || error.message?.includes("Internal error"))) {
+      console.warn(`Internal error in TTS, retrying... (${retries} left)`);
+      // Wait a bit before retrying
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      return generateSpeech(text, voiceOrPairId, style, customVoiceData, retries - 1);
+    }
+    
     console.error("Speech Gen Error:", error);
     throw new Error(error.message || "Speech generation failed.");
   }
