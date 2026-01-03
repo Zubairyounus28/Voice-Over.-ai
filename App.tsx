@@ -5,7 +5,8 @@ import { VoiceOverPanel } from './components/VoiceOverPanel';
 import { VideoToTextPanel } from './components/VideoToTextPanel';
 import { VideoEnhancerPanel } from './components/VideoEnhancerPanel';
 import { ScriptToVideoPanel } from './components/ScriptToVideoPanel';
-import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap, Clapperboard } from 'lucide-react';
+import { AIStoryPanel } from './components/AIStoryPanel';
+import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap, Clapperboard, Video } from 'lucide-react';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(AppMode.VOICE_OVER);
@@ -55,6 +56,17 @@ const App: React.FC = () => {
                 >
                 <Mic size={16} />
                 Voice Generator
+                </button>
+                <button
+                onClick={() => setMode(AppMode.AI_STORY)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                    mode === AppMode.AI_STORY
+                    ? 'bg-slate-800 text-white shadow-sm ring-1 ring-purple-500/50'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+                >
+                <Video size={16} className="text-purple-400" />
+                AI Story Creator
                 </button>
                 <button
                 onClick={() => setMode(AppMode.VIDEO_ENHANCER)}
@@ -109,6 +121,10 @@ const App: React.FC = () => {
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VOICE_OVER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
             >Voice Gen</button>
             <button
+                onClick={() => setMode(AppMode.AI_STORY)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.AI_STORY ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
+            >Story Creator</button>
+            <button
                 onClick={() => setMode(AppMode.VIDEO_ENHANCER)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_ENHANCER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
             >Dubbing</button>
@@ -134,6 +150,16 @@ const App: React.FC = () => {
                 </p>
               </div>
               <VoiceOverPanel />
+            </div>
+          ) : mode === AppMode.AI_STORY ? (
+            <div className="space-y-4">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-white mb-2">AI Story Creator</h2>
+                <p className="text-slate-400 max-w-2xl">
+                  Bring your imagination to life. Generate a script, clone a professional voiceover, and create high-fidelity AI video footage with Veo.
+                </p>
+              </div>
+              <AIStoryPanel />
             </div>
           ) : mode === AppMode.VIDEO_ENHANCER ? (
             <div className="space-y-4">

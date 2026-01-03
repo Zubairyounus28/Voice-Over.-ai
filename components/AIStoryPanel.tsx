@@ -1,7 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Wand2, Download, Video, Film, Smile, User, CheckCircle2, Clapperboard } from 'lucide-react';
+import { Play, Pause, Wand2, Download, Video, Film, Smile, User, CheckCircle2, Clapperboard, RefreshCw } from 'lucide-react';
 import { AVAILABLE_VOICES, VoiceGender, SpeakingStyle, VoiceOption } from '../types';
+// Fix: Members are now exported from geminiService
 import { generateSpeech, translateScript, generateVisualPrompt, generateVeoVideo } from '../services/geminiService';
 import { decodeBase64, decodeAudioData } from '../utils/audioUtils';
 
@@ -40,8 +41,23 @@ export const AIStoryPanel: React.FC = () => {
     return () => { audioContextRef.current?.close(); };
   }, [selectedGender]);
 
+  // Fix: Implement mandatory API Key selection for Veo models as per guidelines
   const handleGenerate = async () => {
     if (!script.trim()) return;
+
+    try {
+      const win = window as any;
+      if (win.aistudio) {
+        const hasKey = await win.aistudio.hasSelectedApiKey();
+        if (!hasKey) {
+          await win.aistudio.openSelectKey();
+          // GUIDELINE: Assume success after openSelectKey to avoid race conditions
+        }
+      }
+    } catch (e) {
+      console.warn("API Key check error", e);
+    }
+
     setIsProcessing(true);
     setStatusMsg('Initializing creative process...');
     
@@ -51,7 +67,8 @@ export const AIStoryPanel: React.FC = () => {
         // 1. Translate if needed
         if (selectedLanguage !== 'English') {
             setStatusMsg(`Translating script to ${selectedLanguage}...`);
-            finalScript = await translateScript(script, selectedLanguage);
+            const translatedText = await translateScript(script, selectedLanguage);
+            if (translatedText) finalScript = translatedText;
         }
 
         // 2. Audio Generation
@@ -68,16 +85,18 @@ export const AIStoryPanel: React.FC = () => {
 
         // 3. Visual Analysis & Generation (Veo)
         setStatusMsg('Analyzing script scenes & composing visuals...');
-        const visualPrompt = await generateVisualPrompt(script); // Use original script for better context
+        // Fix: Use the correctly implemented generateVisualPrompt
+        const visualPrompt = await generateVisualPrompt(script); 
         
-        setStatusMsg('Generating AI video footage (Veo)... This may take a moment.');
+        setStatusMsg('Generating AI video footage (Veo)... This takes 2-4 minutes.');
+        // Fix: Use the correctly implemented generateVeoVideo with polling logic
         const videoUrl = await generateVeoVideo(visualPrompt);
         setGeneratedVideoUrl(videoUrl);
 
         setStatusMsg('');
-    } catch (e) {
+    } catch (e: any) {
         console.error(e);
-        alert("Generation failed. Veo video generation requires a paid API key selection.");
+        alert(`Generation failed: ${e.message || "Check your API key status and billing."}`);
     } finally {
         setIsProcessing(false);
     }
@@ -94,7 +113,7 @@ export const AIStoryPanel: React.FC = () => {
       setIsPlaying(false);
     } else {
       videoRef.current.currentTime = 0;
-      videoRef.current.loop = true; // Loop the background video
+      videoRef.current.loop = true; // Background video loop
       videoRef.current.play();
 
       const source = audioContextRef.current.createBufferSource();
@@ -120,7 +139,7 @@ export const AIStoryPanel: React.FC = () => {
     if(sourceNodeRef.current) { try { sourceNodeRef.current.stop() } catch(e){} }
 
     try {
-        const videoStream = videoRef.current.captureStream();
+        const videoStream = (videoRef.current as any).captureStream();
         const audioDest = audioContextRef.current.createMediaStreamDestination();
         
         const source = audioContextRef.current.createBufferSource();
@@ -159,7 +178,6 @@ export const AIStoryPanel: React.FC = () => {
             }
         };
 
-        // Start
         videoRef.current.currentTime = 0;
         videoRef.current.loop = true;
         
@@ -179,13 +197,11 @@ export const AIStoryPanel: React.FC = () => {
     }
   };
 
-  // UI Helpers
   const filteredVoices = AVAILABLE_VOICES.filter(v => v.gender === selectedGender);
 
   return (
     <div className="h-full flex flex-col gap-6 relative">
       
-      {/* Rendering Overlay */}
       {isRendering && (
           <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl animate-fade-in">
               <div className="w-16 h-16 border-4 border-red-500/30 border-t-red-500 rounded-full animate-spin mb-6"></div>
@@ -196,11 +212,9 @@ export const AIStoryPanel: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
           
-          {/* LEFT: Config */}
           <div className="lg:col-span-4 flex flex-col gap-4">
               <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 flex-1 flex flex-col">
                   
-                  {/* Language */}
                   <div className="mb-6">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Language</label>
                       <select 
@@ -212,7 +226,6 @@ export const AIStoryPanel: React.FC = () => {
                       </select>
                   </div>
 
-                  {/* Gender Tabs */}
                   <div className="mb-6">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Voice Type</label>
                       <div className="flex bg-slate-900 p-1 rounded-xl">
@@ -237,7 +250,6 @@ export const AIStoryPanel: React.FC = () => {
                       </div>
                   </div>
 
-                  {/* Voice List */}
                   <div className="flex-1 overflow-y-auto custom-scrollbar mb-6 min-h-[150px]">
                       <div className="space-y-2">
                           {filteredVoices.map(voice => (
@@ -260,7 +272,6 @@ export const AIStoryPanel: React.FC = () => {
                       </div>
                   </div>
 
-                  {/* Generate Button */}
                   <button 
                     onClick={handleGenerate}
                     disabled={isProcessing || !script}
@@ -268,7 +279,7 @@ export const AIStoryPanel: React.FC = () => {
                   >
                      {isProcessing ? (
                          <>
-                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                           <RefreshCw size={18} className="animate-spin" />
                            <span className="text-xs">Processing...</span>
                          </>
                      ) : (
@@ -279,24 +290,23 @@ export const AIStoryPanel: React.FC = () => {
                      )}
                   </button>
                   {isProcessing && <div className="text-center mt-2 text-xs text-indigo-300 animate-pulse">{statusMsg}</div>}
-
+                  <div className="mt-4 text-[10px] text-center text-slate-500">
+                    Veo requires a <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-indigo-400 underline">paid API key</a>.
+                  </div>
               </div>
           </div>
 
-          {/* RIGHT: Script & Preview */}
           <div className="lg:col-span-8 flex flex-col gap-4">
               
-              {/* Script Input */}
               <div className="bg-slate-800 rounded-2xl border border-slate-700 p-1">
                  <textarea 
                     value={script}
                     onChange={(e) => setScript(e.target.value)}
-                    placeholder="Enter your story script here..."
+                    placeholder="Enter your story idea or script..."
                     className="w-full bg-slate-900/50 rounded-xl p-4 text-slate-200 text-lg resize-none focus:outline-none focus:bg-slate-900 transition-colors h-40"
                  />
               </div>
 
-              {/* Video Preview */}
               <div className="flex-1 bg-black rounded-2xl border border-slate-800 relative overflow-hidden flex items-center justify-center group">
                   {generatedVideoUrl ? (
                       <video 
@@ -304,7 +314,7 @@ export const AIStoryPanel: React.FC = () => {
                         src={generatedVideoUrl}
                         className="w-full h-full object-contain"
                         loop
-                        muted // Muted because we play audio via AudioContext
+                        muted 
                         playsInline
                       />
                   ) : (
@@ -314,7 +324,6 @@ export const AIStoryPanel: React.FC = () => {
                       </div>
                   )}
 
-                  {/* Controls */}
                   {generatedVideoUrl && audioBuffer && !isRendering && (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
                            <button 
@@ -327,14 +336,13 @@ export const AIStoryPanel: React.FC = () => {
                   )}
               </div>
 
-              {/* Action Bar */}
               {generatedVideoUrl && audioBuffer && (
                   <div className="bg-slate-800 rounded-xl p-4 flex justify-between items-center animate-fade-in-up">
                       <div className="flex items-center gap-3">
                           <CheckCircle2 size={20} className="text-green-400" />
                           <div className="text-sm">
                               <div className="font-bold text-white">Ready to Export</div>
-                              <div className="text-slate-400 text-xs">Video & Audio synchronized</div>
+                              <div className="text-slate-400 text-xs">Video & Voiceover synchronized</div>
                           </div>
                       </div>
                       <button 
@@ -342,11 +350,10 @@ export const AIStoryPanel: React.FC = () => {
                         className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-sm transition-colors"
                       >
                           <Download size={16} />
-                          Download MP4
+                          Download WebM
                       </button>
                   </div>
               )}
-
           </div>
       </div>
     </div>

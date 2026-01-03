@@ -3,15 +3,19 @@ import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, SpeakingStyle, VoiceGender } from "../types";
 
 /**
- * Translates text to Urdu using Gemini 3 Flash.
+ * Translates text to Urdu (Standard or Roman) using Gemini 3 Flash.
  */
-export const translateToUrdu = async (text: string): Promise<string> => {
+export const translateToUrdu = async (text: string, roman: boolean = true): Promise<string> => {
   if (!text.trim()) return "";
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const formatInstruction = roman 
+    ? "Use ONLY Roman Urdu (Urdu words written in English/Latin alphabet). No Arabic script." 
+    : "Use standard Urdu script.";
+    
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: [{ parts: [{ text: `Translate the following text to Urdu (Pakistani standard). Provide only the translated Urdu text, nothing else:\n\n${text}` }] }],
+      contents: [{ parts: [{ text: `Translate the following to Urdu. ${formatInstruction} Provide only the translated text:\n\n${text}` }] }],
     });
     return response.text?.trim() || "";
   } catch (error) {
@@ -103,7 +107,7 @@ export const generatePodcastScript = async (text: string, pairId: string, langua
     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[0];
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Convert the following text into a natural, engaging podcast dialogue script between ${pair.speaker1.name} and ${pair.speaker2.name}. 
-    ${language === 'URDU' ? "The dialogue must be in natural Roman Urdu." : "The dialogue must be in English."}
+    ${language === 'URDU' ? "The dialogue must be in natural Roman Urdu (English alphabet only)." : "The dialogue must be in English."}
     Format: ${pair.speaker1.name}: [Line] ...
     Original Text: ${text}`;
 
@@ -126,7 +130,7 @@ export const generateStoryScript = async (text: string, pairId: string, language
     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[0]; 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Convert the following topic into a soothing bedtime story dialogue between ${pair.speaker1.name} and ${pair.speaker2.name}.
-    ${language === 'URDU' ? "Use natural Roman Urdu." : "Use beautiful English."}
+    ${language === 'URDU' ? "Use natural Roman Urdu (Urdu words written with English letters). No Arabic script." : "Use beautiful English."}
     Format strictly as:
     ${pair.speaker1.name}: [Line]
     ${pair.speaker2.name}: [Line]
@@ -150,7 +154,7 @@ export const generateStoryScript = async (text: string, pairId: string, language
 export const generateSoloStoryScript = async (text: string, language: 'ENGLISH' | 'URDU'): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const prompt = `Rewrite the following topic into a beautiful, engaging solo bedtime story narration for a child. 
-  ${language === 'URDU' ? "Use natural Roman Urdu." : "Use magical English."}
+  ${language === 'URDU' ? "IMPORTANT: Use natural ROMAN URDU (Urdu words written using the English/Latin alphabet). DO NOT use Arabic or Urdu script." : "Use magical English."}
   Make it descriptive, rhythmic, and soothing. 
   Topic: ${text}`;
 
@@ -222,6 +226,64 @@ export const generateYouTubeMetadata = async (storyText: string): Promise<{title
 };
 
 /**
+ * Generates a descriptive visual prompt for video generation.
+ */
+export const generateVisualPrompt = async (script: string): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{ parts: [{ text: `Based on this story, generate a descriptive visual prompt (max 50 words) for AI video generation. Focus on character style (Pixar-style 3D), cinematic lighting, and atmospheric depth: "${script.substring(0, 1000)}"` }] }],
+    });
+    return response.text?.trim() || "A magical cinematic story scene in Pixar style.";
+  } catch (error) {
+    return "A beautiful cinematic scene.";
+  }
+};
+
+/**
+ * Generates a video using Veo models.
+ * Note: Users MUST select their own paid API key via aistudio.openSelectKey() before this can succeed.
+ */
+export const generateVeoVideo = async (prompt: string): Promise<string> => {
+  // Always initialize with the current process.env.API_KEY which might be updated via aistudio dialog
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  try {
+    let operation = await ai.models.generateVideos({
+      model: 'veo-3.1-fast-generate-preview',
+      prompt: prompt,
+      config: {
+        numberOfVideos: 1,
+        resolution: '720p',
+        aspectRatio: '16:9'
+      }
+    });
+
+    // Operation loop to poll for completion (usually takes a few minutes)
+    while (!operation.done) {
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      operation = await ai.operations.getVideosOperation({ operation: operation });
+    }
+
+    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!downloadLink) throw new Error("Video generation failed: No video URI returned from the operation.");
+
+    // The downloadLink returns MP4 bytes; must append the API key as a query parameter.
+    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    if (!response.ok) throw new Error(`Failed to download generated video: ${response.statusText}`);
+    
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  } catch (error: any) {
+    console.error("Veo generation error:", error);
+    if (error.message?.includes("Requested entity was not found")) {
+      throw new Error("Veo generation requires a paid GCP project API key. Please ensure you have selected one in the settings.");
+    }
+    throw error;
+  }
+};
+
+/**
  * Generates Pixar-style story image using Gemini 2.5 Flash Image.
  */
 export const generateStoryImage = async (storyText: string, aspectRatio: "9:16" | "16:9"): Promise<string> => {
@@ -241,55 +303,6 @@ export const generateStoryImage = async (storyText: string, aspectRatio: "9:16" 
         console.error("Image generation error:", error);
         throw error;
     }
-};
-
-/**
- * Generates a visual prompt for high-quality video generation.
- */
-export const generateVisualPrompt = async (script: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [{ parts: [{ text: `Create a detailed visual description (max 50 words) for an AI video generation model based on this story part: "${script}". Focus on cinematic lighting, style, and key subjects. No text in output.` }] }],
-    });
-    return response.text?.trim() || "A cinematic animated scene.";
-  } catch (e) {
-    return "A cinematic animated scene.";
-  }
-};
-
-/**
- * Generates video using Veo 3.1 Fast. Handles API key selection.
- */
-export const generateVeoVideo = async (prompt: string): Promise<string> => {
-  // Ensure user has selected a paid API key for Veo
-  if (!(await (window as any).aistudio.hasSelectedApiKey())) {
-    await (window as any).aistudio.openSelectKey();
-  }
-  
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  let operation = await ai.models.generateVideos({
-    model: 'veo-3.1-fast-generate-preview',
-    prompt: prompt,
-    config: {
-      numberOfVideos: 1,
-      resolution: '720p',
-      aspectRatio: '16:9'
-    }
-  });
-
-  // Long-running operation polling
-  while (!operation.done) {
-    await new Promise(resolve => setTimeout(resolve, 10000));
-    operation = await ai.operations.getVideosOperation({ operation: operation });
-  }
-
-  const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-  if (!downloadLink) throw new Error("Video generation failed.");
-  
-  // Append API key for direct download as per Veo guidelines
-  return `${downloadLink}&key=${process.env.API_KEY}`;
 };
 
 /**
@@ -362,17 +375,30 @@ export const generateSpeech = async (
       config: config,
     });
 
-    const part = response.candidates?.[0]?.content?.parts?.[0];
+    const candidate = response.candidates?.[0];
+    if (!candidate) throw new Error("No candidates returned from AI model.");
 
-    if (part?.text && !part?.inlineData) {
-        throw new Error(`AI Refusal: ${part.text}`);
+    const parts = candidate.content?.parts || [];
+    let audioData = null;
+    let refusalText = "";
+
+    // Iterate through all parts to find audio data, as the model might return text + audio
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        audioData = part.inlineData.data;
+      } else if (part.text) {
+        refusalText += part.text;
+      }
     }
 
-    if (!part?.inlineData?.data) {
-      throw new Error("No audio data returned from model.");
+    if (audioData) return audioData;
+
+    // If no audio was found, but text was returned, it's likely a safety refusal or error message
+    if (refusalText) {
+        throw new Error(`AI Refusal: ${refusalText}`);
     }
 
-    return part.inlineData.data; 
+    throw new Error("No audio data returned from model.");
   } catch (error: any) {
     console.error("Speech Gen Error:", error);
     throw new Error(error.message || "Speech generation failed.");
