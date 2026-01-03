@@ -1,4 +1,3 @@
-
 // Utility to base64 decode
 export function decodeBase64(base64: string): Uint8Array {
   const binaryString = atob(base64);
@@ -23,8 +22,8 @@ export async function decodeAudioData(
     return await ctx.decodeAudioData(bufferCopy);
   } catch (e) {
     // If native decode fails, assume raw PCM (Gemini often sends raw PCM)
-    // 1 channel, 16-bit PCM (2 bytes per sample)
-    const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+    // 1 channel, 16-bit PCM usually
+    const dataInt16 = new Int16Array(data.buffer);
     const numChannels = 1;
     const frameCount = dataInt16.length;
     const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
