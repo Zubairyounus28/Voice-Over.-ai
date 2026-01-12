@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Wand2, Mic, User, Smile, BookOpen, Globe, Users, Sparkles, RefreshCw, MoonStar, Image as ImageIcon, Video, FileText, Youtube, Hash, Copy, Fingerprint } from 'lucide-react';
+import { Play, Pause, Download, Wand2, Mic, User, Smile, BookOpen, Globe, Users, Sparkles, RefreshCw, MoonStar, Image as ImageIcon, Video, FileText, Youtube, Hash, Copy, Check, Fingerprint } from 'lucide-react';
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, VoiceOption, VoiceGender, SpeakingStyle } from '../types';
 import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, generateSoloStoryScript, analyzeVoiceSample, optimizeScriptForSpeech, generateStoryImage, generateStoryTitle, generateYouTubeMetadata } from '../services/geminiService';
 import { decodeBase64, decodeAudioData, audioBufferToWav, fileToBase64 } from '../utils/audioUtils';
@@ -26,6 +26,10 @@ export const VoiceOverPanel: React.FC = () => {
   const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
   const [isRenderingVideo, setIsRenderingVideo] = useState<boolean>(false);
 
+  // Copy Feedback States
+  const [copiedScript, setCopiedScript] = useState(false);
+  const [copiedMeta, setCopiedMeta] = useState<string | null>(null);
+
   // Content Data
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [storyImageUrl, setStoryImageUrl] = useState<string | null>(null);
@@ -48,6 +52,17 @@ export const VoiceOverPanel: React.FC = () => {
     gainNodeRef.current.connect(audioContextRef.current.destination);
     return () => { audioContextRef.current?.close(); };
   }, []);
+
+  const handleCopy = (content: string, type: string) => {
+    navigator.clipboard.writeText(content);
+    if (type === 'script') {
+      setCopiedScript(true);
+      setTimeout(() => setCopiedScript(false), 2000);
+    } else {
+      setCopiedMeta(type);
+      setTimeout(() => setCopiedMeta(null), 2000);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!text.trim()) return;
@@ -208,6 +223,7 @@ export const VoiceOverPanel: React.FC = () => {
             a.href = url;
             a.download = `${storyTitle || 'vox_story'}.${mime.split('/')[1]}`;
             a.click();
+            document.body.removeChild(a);
             setIsRenderingVideo(false);
         };
         recorder.start();
@@ -326,12 +342,20 @@ export const VoiceOverPanel: React.FC = () => {
       </div>
 
       {/* Editor & Results Area */}
-      <div className="lg:col-span-8 flex flex-col gap-4 h-full">
+      <div className="lg:col-span-8 flex flex-col gap-4 h-full overflow-y-auto custom-scrollbar">
         {/* Editor */}
-        <div className="flex-1 bg-slate-900 rounded-2xl border border-slate-800 p-6 flex flex-col shadow-2xl relative overflow-hidden">
+        <div className="shrink-0 bg-slate-900 rounded-2xl border border-slate-800 p-6 flex flex-col shadow-2xl relative overflow-hidden">
            <div className="flex justify-between items-center mb-4">
               <label className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><FileText size={14}/> Script Editor</label>
               <div className="flex gap-2">
+                 <button 
+                   onClick={() => handleCopy(text, 'script')} 
+                   disabled={!text} 
+                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-bold text-indigo-400 flex items-center gap-2 transition-all disabled:opacity-50"
+                 >
+                   {copiedScript ? <Check size={12} /> : <Copy size={12}/>}
+                   {copiedScript ? 'Copied!' : 'Copy Script'}
+                 </button>
                  {(speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.SOLO_STORY) && (
                    <button onClick={handleGenerateScript} disabled={isProcessingScript || !text} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-[10px] font-bold text-white flex items-center gap-2 disabled:opacity-50 transition-all">
                      {isProcessingScript ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12}/>} AI Write {podcastLang === 'URDU' ? 'Roman Urdu' : 'English'} Story
@@ -343,7 +367,7 @@ export const VoiceOverPanel: React.FC = () => {
               </div>
            </div>
            
-           <div className="flex gap-4 h-full">
+           <div className="flex gap-4 h-64">
               <textarea 
                 className={`flex-1 bg-slate-950 border border-slate-800 rounded-xl p-6 text-slate-200 text-lg focus:ring-2 focus:ring-indigo-500/30 outline-none resize-none placeholder-slate-700 transition-all ${podcastLang === 'URDU' ? 'text-left tracking-wide' : ''}`}
                 placeholder={podcastLang === 'URDU' ? "Story ka topic likhein..." : "Type your story idea here, e.g., 'A lion and a mouse become best friends'..."}
@@ -377,8 +401,68 @@ export const VoiceOverPanel: React.FC = () => {
            </div>
         </div>
 
+        {/* YouTube Metadata Section (Only for Stories) */}
+        {youtubeMeta && (
+          <div className="animate-fade-in bg-slate-900 rounded-2xl border border-slate-800 p-6 flex flex-col gap-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                <Youtube size={16} /> YouTube SEO Metadata
+              </h3>
+              <span className="text-[10px] text-slate-500 italic">Optimized for Viral Reach</span>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Title */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Suggested Title</label>
+                  <button onClick={() => handleCopy(youtubeMeta.title, 'meta-title')} className="text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 text-[10px] font-bold">
+                    {copiedMeta === 'meta-title' ? <Check size={10} /> : <Copy size={10} />}
+                    {copiedMeta === 'meta-title' ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs text-white font-medium">
+                  {youtubeMeta.title}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Suggested Description</label>
+                  <button onClick={() => handleCopy(youtubeMeta.description, 'meta-desc')} className="text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 text-[10px] font-bold">
+                    {copiedMeta === 'meta-desc' ? <Check size={10} /> : <Copy size={10} />}
+                    {copiedMeta === 'meta-desc' ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] text-slate-300 leading-relaxed max-h-24 overflow-y-auto">
+                  {youtubeMeta.description}
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">SEO Tags</label>
+                  <button onClick={() => handleCopy(youtubeMeta.tags, 'meta-tags')} className="text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 text-[10px] font-bold">
+                    {copiedMeta === 'meta-tags' ? <Check size={10} /> : <Copy size={10} />}
+                    {copiedMeta === 'meta-tags' ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  {youtubeMeta.tags.split(',').map((tag, i) => (
+                    <span key={i} className="text-[9px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded flex items-center gap-1">
+                      <Hash size={8} /> {tag.trim()}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Result & High Visibility Download */}
-        <div className={`bg-slate-900 rounded-2xl border border-slate-800 p-6 flex flex-col gap-4 transition-all duration-500 ${audioBuffer ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'}`}>
+        <div className={`shrink-0 bg-slate-900 rounded-2xl border border-slate-800 p-6 flex flex-col gap-4 transition-all duration-500 ${audioBuffer ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'}`}>
            <div className="flex items-center gap-4">
               <button onClick={togglePlayback} className="w-16 h-16 bg-white text-slate-950 rounded-full flex items-center justify-center shadow-2xl hover:scale-105 transition-all active:scale-95">
                 {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" className="ml-1" />}
