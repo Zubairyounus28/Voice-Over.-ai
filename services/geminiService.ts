@@ -33,19 +33,19 @@ export const generateShortsSegments = async (script: string, characterDescriptio
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [{ parts: [{ text: `
-        Break the following script into logical 5-second segments for a vertical "Shorts" or "Flow" video series.
-        For each segment, write a visual prompt for an AI video generator.
+        Break the following script into logical segments for a video flow.
+        For each segment, write a detailed visual prompt for an AI video generator.
         
-        RULES:
-        1. Character: ${characterDescription}
-        2. BACKGROUND: Every scene MUST have a solid, flat, vibrant CHROMAKEY GREEN SCREEN background.
-        3. ACTING: The character should be looking towards the camera, talking or performing actions suitable for the script part.
-        4. Consistency: Describe the clothing and facial features precisely to maintain identity.
+        CRITICAL RULES FOR VISUAL PROMPTS:
+        1. CHARACTER CONSISTENCY: Use the exact same physical description for every segment: ${characterDescription}. Describe specific clothing (e.g., color of dupatta, style of kurti) to ensure identity doesn't shift.
+        2. BACKGROUND: Every scene MUST have a professional, flat, solid CHROMA KEY GREEN SCREEN background. No furniture, no shadows on the green.
+        3. ACTING: The character should look at the lens, speaking or gesturing naturally.
+        4. QUALITY: Cinematic 8k, photorealistic, studio lighting.
         
         Return JSON format:
         {
           "segments": [
-            { "text": "Script sentence here", "visual_prompt": "Visual description including character, action, and green screen background" },
+            { "text": "Segment script text", "visual_prompt": "Ultra-detailed visual prompt including character details and green screen instruction" },
             ...
           ]
         }
