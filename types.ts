@@ -21,7 +21,48 @@ export enum AppMode {
   VIDEO_ENHANCER = 'VIDEO_ENHANCER',
   SCRIPT_TO_VIDEO = 'SCRIPT_TO_VIDEO',
   AI_STORY = 'AI_STORY',
+  AUDIO_SPLITTER = 'AUDIO_SPLITTER',
+  SCRIPT_TO_SHORTS = 'SCRIPT_TO_SHORTS',
 }
+
+export interface VideoCharacter {
+  id: string;
+  name: string;
+  description: string;
+  gender: VoiceGender;
+  visualTraits: string;
+}
+
+export const STORY_CHARACTERS: VideoCharacter[] = [
+  {
+    id: 'pk_woman_dupatta',
+    name: 'Modern Pakistani Woman',
+    description: 'Elegant woman wearing a stylish dupatta',
+    gender: VoiceGender.FEMALE,
+    visualTraits: 'A modern Pakistani woman, graceful features, wearing a beautiful embroidered lawn suit with a stylish dupatta draped over one shoulder, natural makeup, professional and friendly appearance.'
+  },
+  {
+    id: 'pk_man_modern',
+    name: 'Modern Pakistani Man',
+    description: 'Clean-cut man in contemporary attire',
+    gender: VoiceGender.MALE,
+    visualTraits: 'A modern Pakistani man, sharp features, well-groomed short hair, wearing a stylish contemporary shalwar kameez or a smart casual button-down shirt, energetic and professional.'
+  },
+  {
+    id: 'pk_girl_modern',
+    name: 'Pakistani Modern Girl',
+    description: 'Cheerful young girl with traditional accents',
+    gender: VoiceGender.CHILD,
+    visualTraits: 'A young Pakistani girl, around 8-10 years old, sparkling eyes, long hair, wearing a colorful bright kurti with small dupatta accents, joyful and expressive.'
+  },
+  {
+    id: 'pk_boy_modern',
+    name: 'Pakistani Modern Boy',
+    description: 'Active young boy in smart clothing',
+    gender: VoiceGender.CHILD,
+    visualTraits: 'A young Pakistani boy, around 8-10 years old, mischievous smile, wearing a smart casual kurti or polo shirt, energetic and curious.'
+  }
+];
 
 export interface VoiceOption {
   id: string;

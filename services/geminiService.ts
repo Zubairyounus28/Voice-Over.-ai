@@ -25,6 +25,60 @@ export const translateToUrdu = async (text: string, roman: boolean = true): Prom
 };
 
 /**
+ * Breaks a script into 5-second segments for video flow.
+ */
+export const generateShortsSegments = async (script: string, characterDescription: string): Promise<{segments: {text: string, visual_prompt: string}[]}> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{ parts: [{ text: `
+        Break the following script into logical 5-second segments for a vertical "Shorts" or "Flow" video series.
+        For each segment, write a visual prompt for an AI video generator.
+        
+        RULES:
+        1. Character: ${characterDescription}
+        2. BACKGROUND: Every scene MUST have a solid, flat, vibrant CHROMAKEY GREEN SCREEN background.
+        3. ACTING: The character should be looking towards the camera, talking or performing actions suitable for the script part.
+        4. Consistency: Describe the clothing and facial features precisely to maintain identity.
+        
+        Return JSON format:
+        {
+          "segments": [
+            { "text": "Script sentence here", "visual_prompt": "Visual description including character, action, and green screen background" },
+            ...
+          ]
+        }
+
+        Script: "${script}"
+      ` }] }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            segments: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  text: { type: Type.STRING },
+                  visual_prompt: { type: Type.STRING }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+    return JSON.parse(response.text || '{"segments":[]}');
+  } catch (error) {
+    console.error("Shorts segmentation error:", error);
+    throw error;
+  }
+};
+
+/**
  * Optimizes script for TTS performance using Gemini 3 Flash.
  */
 export const optimizeScriptForSpeech = async (text: string): Promise<string> => {
@@ -245,7 +299,7 @@ export const generateVisualPrompt = async (script: string): Promise<string> => {
  * Generates a video using Veo models.
  * Note: Users MUST select their own paid API key via aistudio.openSelectKey() before this can succeed.
  */
-export const generateVeoVideo = async (prompt: string): Promise<string> => {
+export const generateVeoVideo = async (prompt: string, aspectRatio: '16:9' | '9:16' = '16:9'): Promise<string> => {
   // Always initialize with the current process.env.API_KEY which might be updated via aistudio dialog
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
@@ -255,7 +309,7 @@ export const generateVeoVideo = async (prompt: string): Promise<string> => {
       config: {
         numberOfVideos: 1,
         resolution: '720p',
-        aspectRatio: '16:9'
+        aspectRatio: aspectRatio
       }
     });
 

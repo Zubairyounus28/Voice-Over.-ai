@@ -6,7 +6,9 @@ import { VideoToTextPanel } from './components/VideoToTextPanel';
 import { VideoEnhancerPanel } from './components/VideoEnhancerPanel';
 import { ScriptToVideoPanel } from './components/ScriptToVideoPanel';
 import { AIStoryPanel } from './components/AIStoryPanel';
-import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap, Clapperboard, Video } from 'lucide-react';
+import { AudioSplitterPanel } from './components/AudioSplitterPanel';
+import { ScriptToShortsPanel } from './components/ScriptToShortsPanel';
+import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap, Clapperboard, Video, Scissors, Layers } from 'lucide-react';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(AppMode.VOICE_OVER);
@@ -58,6 +60,17 @@ const App: React.FC = () => {
                 Voice Generator
                 </button>
                 <button
+                onClick={() => setMode(AppMode.SCRIPT_TO_SHORTS)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                    mode === AppMode.SCRIPT_TO_SHORTS
+                    ? 'bg-slate-800 text-white shadow-sm ring-1 ring-emerald-500/50'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+                >
+                <Layers size={16} className="text-emerald-400" />
+                Green Screen Shorts
+                </button>
+                <button
                 onClick={() => setMode(AppMode.AI_STORY)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     mode === AppMode.AI_STORY
@@ -91,15 +104,15 @@ const App: React.FC = () => {
                 Smart Lip-Sync
                 </button>
                 <button
-                onClick={() => setMode(AppMode.VIDEO_TO_TEXT)}
+                onClick={() => setMode(AppMode.AUDIO_SPLITTER)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-                    mode === AppMode.VIDEO_TO_TEXT
+                    mode === AppMode.AUDIO_SPLITTER
                     ? 'bg-slate-800 text-white shadow-sm'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                 }`}
                 >
-                <FileVideo size={16} />
-                Video to Text
+                <Scissors size={16} />
+                Splitter
                 </button>
              </nav>
 
@@ -114,33 +127,19 @@ const App: React.FC = () => {
         </div>
       </header>
       
-      {/* Mobile Nav (if screen is small) */}
+      {/* Mobile Nav */}
        <div className="md:hidden px-6 py-2 bg-slate-900 border-b border-slate-800 overflow-x-auto flex gap-2">
-            <button
-                onClick={() => setMode(AppMode.VOICE_OVER)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VOICE_OVER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
-            >Voice Gen</button>
-            <button
-                onClick={() => setMode(AppMode.AI_STORY)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.AI_STORY ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
-            >Story Creator</button>
-            <button
-                onClick={() => setMode(AppMode.VIDEO_ENHANCER)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_ENHANCER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
-            >Dubbing</button>
-            <button
-                onClick={() => setMode(AppMode.SCRIPT_TO_VIDEO)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.SCRIPT_TO_VIDEO ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
-            >Lip-Sync</button>
-             <button
-                onClick={() => setMode(AppMode.VIDEO_TO_TEXT)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_TO_TEXT ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
-            >Transcriber</button>
+            <button onClick={() => setMode(AppMode.VOICE_OVER)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VOICE_OVER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Voice Gen</button>
+            <button onClick={() => setMode(AppMode.SCRIPT_TO_SHORTS)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.SCRIPT_TO_SHORTS ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Shorts</button>
+            <button onClick={() => setMode(AppMode.AI_STORY)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.AI_STORY ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Story Creator</button>
+            <button onClick={() => setMode(AppMode.VIDEO_ENHANCER)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_ENHANCER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Dubbing</button>
+            <button onClick={() => setMode(AppMode.SCRIPT_TO_VIDEO)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.SCRIPT_TO_VIDEO ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Lip-Sync</button>
+            <button onClick={() => setMode(AppMode.AUDIO_SPLITTER)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.AUDIO_SPLITTER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Splitter</button>
        </div>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <div className="animate-fade-in-up">
+        <div className="animate-fade-in">
           {mode === AppMode.VOICE_OVER ? (
             <div className="space-y-4">
               <div className="mb-8">
@@ -150,6 +149,26 @@ const App: React.FC = () => {
                 </p>
               </div>
               <VoiceOverPanel />
+            </div>
+          ) : mode === AppMode.SCRIPT_TO_SHORTS ? (
+            <div className="space-y-4">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-white mb-2 text-emerald-400">Green Screen Shorts Flow</h2>
+                <p className="text-slate-400 max-w-2xl">
+                  Convert your script into 5-second green screen flows. Select your character and generate consistent, high-fidelity video clips for professional editing.
+                </p>
+              </div>
+              <ScriptToShortsPanel />
+            </div>
+          ) : mode === AppMode.AUDIO_SPLITTER ? (
+            <div className="space-y-4">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-white mb-2">Audio Part Splitter</h2>
+                <p className="text-slate-400 max-w-2xl">
+                  Automatically split your audio into precise segments for dataset training or short-form content.
+                </p>
+              </div>
+              <AudioSplitterPanel />
             </div>
           ) : mode === AppMode.AI_STORY ? (
             <div className="space-y-4">
