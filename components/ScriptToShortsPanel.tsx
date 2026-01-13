@@ -1,17 +1,58 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Wand2, Download, Video, FileText, User, Sparkles, RefreshCw, Layers, Monitor, CheckCircle2, FileDown, Mic, Volume2, Maximize, Smartphone, Clapperboard, Copy, Check } from 'lucide-react';
-import { STORY_CHARACTERS, VideoCharacter, AVAILABLE_VOICES, SpeakingStyle } from '../types';
+import { Play, Pause, Wand2, Download, Video, FileText, User, Sparkles, RefreshCw, Layers, Monitor, CheckCircle2, FileDown, Mic, Volume2, Maximize, Smartphone, Clapperboard, Copy, Check, Plus, X, UserPlus, Fingerprint } from 'lucide-react';
+import { STORY_CHARACTERS, VideoCharacter, AVAILABLE_VOICES, SpeakingStyle, VoiceGender } from '../types';
 import { generateShortsSegments } from '../services/geminiService';
 
 export const ScriptToShortsPanel: React.FC = () => {
   const [script, setScript] = useState('');
+  const [customCharacters, setCustomCharacters] = useState<VideoCharacter[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<VideoCharacter>(STORY_CHARACTERS[0]);
   const [aspectRatio, setAspectRatio] = useState<'9:16' | '16:9'>('9:16');
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // New Character Form State
+  const [newChar, setNewChar] = useState({
+    name: '',
+    description: '',
+    gender: VoiceGender.FEMALE,
+    visualTraits: ''
+  });
+
+  // Load custom characters from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('voxstudio_custom_chars');
+    if (saved) {
+      try {
+        setCustomCharacters(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to parse custom characters", e);
+      }
+    }
+  }, []);
+
+  // Save custom characters to localStorage
+  useEffect(() => {
+    localStorage.setItem('voxstudio_custom_chars', JSON.stringify(customCharacters));
+  }, [customCharacters]);
+
+  const allCharacters = [...STORY_CHARACTERS, ...customCharacters];
+
+  const handleAddCharacter = () => {
+    if (!newChar.name || !newChar.visualTraits) return;
+    const char: VideoCharacter = {
+      id: `custom_${Date.now()}`,
+      ...newChar
+    };
+    setCustomCharacters([...customCharacters, char]);
+    setSelectedCharacter(char);
+    setIsModalOpen(false);
+    setNewChar({ name: '', description: '', gender: VoiceGender.FEMALE, visualTraits: '' });
+  };
+
   const [segments, setSegments] = useState<{
     text: string, 
     visual_prompt: string
@@ -24,7 +65,6 @@ export const ScriptToShortsPanel: React.FC = () => {
     setSegments([]);
     
     try {
-      // The prompt includes aspect ratio context to help Gemini write better visual descriptions
       const characterWithRatio = `${selectedCharacter.visualTraits} The video should be in ${aspectRatio === '9:16' ? 'vertical portrait' : 'wide landscape'} format.`;
       const result = await generateShortsSegments(script, characterWithRatio);
       setSegments(result.segments);
@@ -74,25 +114,105 @@ export const ScriptToShortsPanel: React.FC = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full min-h-[750px]">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full min-h-[750px] relative">
       
+      {/* Custom Character Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <UserPlus className="text-indigo-400" size={20} /> Add Custom Character
+              </h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-500 hover:text-white transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-2">Character Name</label>
+                <input 
+                  type="text" 
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white outline-none focus:ring-2 focus:ring-indigo-500/30"
+                  placeholder="e.g. Grandma Sofia"
+                  value={newChar.name}
+                  onChange={e => setNewChar({...newChar, name: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-2">Short Description</label>
+                <input 
+                  type="text" 
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white outline-none focus:ring-2 focus:ring-indigo-500/30"
+                  placeholder="e.g. Kind elder woman with a story to tell"
+                  value={newChar.description}
+                  onChange={e => setNewChar({...newChar, description: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-2">Gender Category</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[VoiceGender.FEMALE, VoiceGender.MALE, VoiceGender.CHILD].map(g => (
+                    <button
+                      key={g}
+                      onClick={() => setNewChar({...newChar, gender: g})}
+                      className={`py-2 rounded-xl text-[10px] font-bold border transition-all ${newChar.gender === g ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-500'}`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-2">Detailed Visual Traits (AI Prompt)</label>
+                <textarea 
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white outline-none focus:ring-2 focus:ring-indigo-500/30 h-24 resize-none"
+                  placeholder="e.g. An elderly Italian grandmother, warm wrinkled face, white hair in a bun, wearing a floral apron over a black dress, expressive hands..."
+                  value={newChar.visualTraits}
+                  onChange={e => setNewChar({...newChar, visualTraits: e.target.value})}
+                />
+                <p className="text-[9px] text-slate-500 mt-2 italic">Be very specific about clothing and features for consistency.</p>
+              </div>
+            </div>
+            <div className="p-6 bg-slate-950 border-t border-slate-800 flex gap-3">
+              <button onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-sm">Cancel</button>
+              <button onClick={handleAddCharacter} disabled={!newChar.name || !newChar.visualTraits} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm disabled:opacity-50">Create Character</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar: Config */}
       <div className="lg:col-span-4 flex flex-col gap-6">
         <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 flex flex-col gap-6 shadow-2xl h-full">
           
           <section>
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <User size={14} className="text-indigo-400" /> 1. Select Character
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {STORY_CHARACTERS.map(char => (
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <User size={14} className="text-indigo-400" /> 1. Select Character
+              </h3>
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="text-[10px] text-indigo-400 flex items-center gap-1 hover:text-indigo-300 font-bold bg-indigo-500/10 px-2 py-1 rounded border border-indigo-500/20"
+              >
+                <Plus size={10} /> Add New
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+              {allCharacters.map(char => (
                 <button
                   key={char.id}
                   onClick={() => setSelectedCharacter(char)}
-                  className={`p-3 rounded-xl border text-left transition-all ${selectedCharacter.id === char.id ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}
+                  className={`p-3 rounded-xl border text-left transition-all relative ${selectedCharacter.id === char.id ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}
                 >
-                  <div className="font-bold text-[11px] mb-1">{char.name}</div>
-                  <div className="text-[9px] opacity-70 leading-tight">{char.description}</div>
+                  <div className="font-bold text-[11px] mb-1 truncate">{char.name}</div>
+                  <div className="text-[9px] opacity-70 leading-tight line-clamp-2">{char.description}</div>
+                  {char.id.startsWith('custom_') && (
+                    <div className="absolute top-1 right-1">
+                      {/* Added missing Fingerprint icon */}
+                      <Fingerprint size={10} className="text-indigo-300 opacity-50" />
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
