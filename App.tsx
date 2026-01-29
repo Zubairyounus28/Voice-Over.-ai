@@ -3,12 +3,13 @@ import React, { useState } from 'react';
 import { AppMode } from './types';
 import { VoiceOverPanel } from './components/VoiceOverPanel';
 import { VideoToTextPanel } from './components/VideoToTextPanel';
+import { VideoToMP3Panel } from './components/VideoToMP3Panel';
 import { VideoEnhancerPanel } from './components/VideoEnhancerPanel';
 import { ScriptToVideoPanel } from './components/ScriptToVideoPanel';
 import { AIStoryPanel } from './components/AIStoryPanel';
 import { AudioSplitterPanel } from './components/AudioSplitterPanel';
 import { ScriptToShortsPanel } from './components/ScriptToShortsPanel';
-import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap, Clapperboard, Video, Scissors, Layers } from 'lucide-react';
+import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap, Clapperboard, Video, Scissors, Layers, Music } from 'lucide-react';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(AppMode.VOICE_OVER);
@@ -30,7 +31,7 @@ const App: React.FC = () => {
           100% { background-color: #ef4444; border-color: #ef4444; }
         }
         .animate-blink-custom {
-          animation: blink-red-yellow 1s infinite;
+          animation: blink-red-yellow infinite 1s;
         }
       `}</style>
 
@@ -80,6 +81,17 @@ const App: React.FC = () => {
                 >
                 <FileVideo size={16} className="text-blue-400" />
                 Video to Text
+                </button>
+                <button
+                onClick={() => setMode(AppMode.VIDEO_TO_MP3)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                    mode === AppMode.VIDEO_TO_MP3
+                    ? 'bg-slate-800 text-white shadow-sm ring-1 ring-pink-500/50'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+                >
+                <Music size={16} className="text-pink-400" />
+                Video to MP3
                 </button>
                 <button
                 onClick={() => setMode(AppMode.AI_STORY)}
@@ -143,6 +155,7 @@ const App: React.FC = () => {
             <button onClick={() => setMode(AppMode.VOICE_OVER)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VOICE_OVER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Voice Gen</button>
             <button onClick={() => setMode(AppMode.SCRIPT_TO_SHORTS)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.SCRIPT_TO_SHORTS ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Shorts</button>
             <button onClick={() => setMode(AppMode.VIDEO_TO_TEXT)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_TO_TEXT ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>To Text</button>
+            <button onClick={() => setMode(AppMode.VIDEO_TO_MP3)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_TO_MP3 ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>To MP3</button>
             <button onClick={() => setMode(AppMode.AI_STORY)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.AI_STORY ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Story</button>
             <button onClick={() => setMode(AppMode.VIDEO_ENHANCER)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_ENHANCER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Dubbing</button>
             <button onClick={() => setMode(AppMode.SCRIPT_TO_VIDEO)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.SCRIPT_TO_VIDEO ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Lip-Sync</button>
@@ -181,6 +194,16 @@ const App: React.FC = () => {
                 </p>
               </div>
               <VideoToTextPanel />
+            </div>
+          ) : mode === AppMode.VIDEO_TO_MP3 ? (
+            <div className="space-y-4">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-white mb-2 text-pink-400">Video to Audio Converter</h2>
+                <p className="text-slate-400 max-w-2xl">
+                  Extract high-quality audio tracks from your videos instantly. Perfect for making MP3s from music videos or podcasts.
+                </p>
+              </div>
+              <VideoToMP3Panel />
             </div>
           ) : mode === AppMode.AUDIO_SPLITTER ? (
             <div className="space-y-4">
