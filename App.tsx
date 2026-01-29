@@ -68,7 +68,18 @@ const App: React.FC = () => {
                 }`}
                 >
                 <Layers size={16} className="text-emerald-400" />
-                Green Screen Shorts
+                Shorts Flow
+                </button>
+                <button
+                onClick={() => setMode(AppMode.VIDEO_TO_TEXT)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                    mode === AppMode.VIDEO_TO_TEXT
+                    ? 'bg-slate-800 text-white shadow-sm ring-1 ring-blue-500/50'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+                >
+                <FileVideo size={16} className="text-blue-400" />
+                Video to Text
                 </button>
                 <button
                 onClick={() => setMode(AppMode.AI_STORY)}
@@ -79,7 +90,7 @@ const App: React.FC = () => {
                 }`}
                 >
                 <Video size={16} className="text-purple-400" />
-                AI Story Creator
+                Story Creator
                 </button>
                 <button
                 onClick={() => setMode(AppMode.VIDEO_ENHANCER)}
@@ -90,7 +101,7 @@ const App: React.FC = () => {
                 }`}
                 >
                 <Wand2 size={16} className="text-indigo-400" />
-                AI Video Dubbing
+                Dubbing
                 </button>
                 <button
                 onClick={() => setMode(AppMode.SCRIPT_TO_VIDEO)}
@@ -101,7 +112,7 @@ const App: React.FC = () => {
                 }`}
                 >
                 <Clapperboard size={16} />
-                Smart Lip-Sync
+                Lip-Sync
                 </button>
                 <button
                 onClick={() => setMode(AppMode.AUDIO_SPLITTER)}
@@ -131,7 +142,8 @@ const App: React.FC = () => {
        <div className="md:hidden px-6 py-2 bg-slate-900 border-b border-slate-800 overflow-x-auto flex gap-2">
             <button onClick={() => setMode(AppMode.VOICE_OVER)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VOICE_OVER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Voice Gen</button>
             <button onClick={() => setMode(AppMode.SCRIPT_TO_SHORTS)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.SCRIPT_TO_SHORTS ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Shorts</button>
-            <button onClick={() => setMode(AppMode.AI_STORY)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.AI_STORY ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Story Creator</button>
+            <button onClick={() => setMode(AppMode.VIDEO_TO_TEXT)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_TO_TEXT ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>To Text</button>
+            <button onClick={() => setMode(AppMode.AI_STORY)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.AI_STORY ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Story</button>
             <button onClick={() => setMode(AppMode.VIDEO_ENHANCER)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_ENHANCER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Dubbing</button>
             <button onClick={() => setMode(AppMode.SCRIPT_TO_VIDEO)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.SCRIPT_TO_VIDEO ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Lip-Sync</button>
             <button onClick={() => setMode(AppMode.AUDIO_SPLITTER)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.AUDIO_SPLITTER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Splitter</button>
@@ -159,6 +171,16 @@ const App: React.FC = () => {
                 </p>
               </div>
               <ScriptToShortsPanel />
+            </div>
+          ) : mode === AppMode.VIDEO_TO_TEXT ? (
+            <div className="space-y-4">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-white mb-2 text-blue-400">Video Transcriber</h2>
+                <p className="text-slate-400 max-w-2xl">
+                  Extract accurate speech-to-text from your videos instantly using multimodal AI analysis.
+                </p>
+              </div>
+              <VideoToTextPanel />
             </div>
           ) : mode === AppMode.AUDIO_SPLITTER ? (
             <div className="space-y-4">
@@ -203,12 +225,12 @@ const App: React.FC = () => {
           ) : (
             <div className="space-y-4">
               <div className="mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2">Video Transcriber</h2>
+                <h2 className="text-3xl font-bold text-white mb-2">Voice Generator</h2>
                 <p className="text-slate-400 max-w-2xl">
-                  Extract accurate speech-to-text from your videos instantly using multimodal AI analysis.
+                  Transform text into lifelike speech. Select a persona and adjust the pitch to simulate various ages.
                 </p>
               </div>
-              <VideoToTextPanel />
+              <VoiceOverPanel />
             </div>
           )}
         </div>
