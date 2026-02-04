@@ -41,6 +41,10 @@ export const VideoEnhancerPanel: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const f = e.target.files[0];
+      if (f.size > 30 * 1024 * 1024) {
+        alert("Please select a video file under 30MB.");
+        return;
+      }
       setFile(f);
       setVideoUrl(URL.createObjectURL(f));
       setStep(1);
@@ -375,7 +379,7 @@ export const VideoEnhancerPanel: React.FC = () => {
                 <input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" accept="video/*" />
                 <Upload size={40} className="text-slate-400 mb-4" />
                 <p className="text-slate-300 font-medium">Upload Video to Enhance</p>
-                <p className="text-slate-500 text-sm mt-2">Max 20MB</p>
+                <p className="text-slate-500 text-sm mt-2">Max 30MB</p>
               </div>
             )}
 

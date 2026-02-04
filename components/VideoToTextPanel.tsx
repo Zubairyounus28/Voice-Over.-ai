@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Upload, FileVideo, Copy, Check, FileText } from 'lucide-react';
 import { fileToBase64 } from '../utils/audioUtils';
@@ -13,7 +14,12 @@ export const VideoToTextPanel: React.FC = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      if (selectedFile.size > 30 * 1024 * 1024) {
+        alert("Please select a video file under 30MB.");
+        return;
+      }
+      setFile(selectedFile);
     }
   };
 
@@ -33,6 +39,10 @@ export const VideoToTextPanel: React.FC = () => {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
       if (droppedFile.type.startsWith('video/')) {
+        if (droppedFile.size > 30 * 1024 * 1024) {
+          alert("Please select a video file under 30MB.");
+          return;
+        }
         setFile(droppedFile);
       } else {
         alert('Please drop a valid video file.');
@@ -43,9 +53,9 @@ export const VideoToTextPanel: React.FC = () => {
   const handleTranscribe = async () => {
     if (!file) return;
     
-    // Size check (Client side limiter for demo purposes, 20MB roughly)
-    if (file.size > 20 * 1024 * 1024) {
-      alert("For this browser-based demo, please keep video files under 20MB.");
+    // Size check (Client side limiter for demo purposes, 30MB roughly)
+    if (file.size > 30 * 1024 * 1024) {
+      alert("For this browser-based demo, please keep video files under 30MB.");
       return;
     }
 
@@ -115,7 +125,7 @@ export const VideoToTextPanel: React.FC = () => {
               <p className="text-slate-500 text-sm max-w-xs mx-auto mb-4">
                 Drag and drop your video file here, or click to browse.
               </p>
-              <span className="text-xs px-3 py-1 bg-slate-700 rounded-full text-slate-300">Max 20MB</span>
+              <span className="text-xs px-3 py-1 bg-slate-700 rounded-full text-slate-300">Max 30MB</span>
             </div>
           )}
         </div>

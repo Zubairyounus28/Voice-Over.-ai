@@ -37,6 +37,10 @@ export const ScriptToVideoPanel: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const f = e.target.files[0];
+      if (f.size > 30 * 1024 * 1024) {
+        alert("Please select a video file under 30MB.");
+        return;
+      }
       setFile(f);
       setVideoUrl(URL.createObjectURL(f));
       setStep(1);
@@ -261,7 +265,7 @@ export const ScriptToVideoPanel: React.FC = () => {
                 <input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" accept="video/*" />
                 <Upload size={40} className="text-slate-400 mb-4" />
                 <p className="text-slate-300 font-medium">Upload Video</p>
-                <p className="text-slate-500 text-sm mt-2">Max 20MB</p>
+                <p className="text-slate-500 text-sm mt-2">Max 30MB</p>
               </div>
             )}
 
@@ -369,7 +373,7 @@ export const ScriptToVideoPanel: React.FC = () => {
                      
                      <button 
                         onClick={() => setStep(2)}
-                        className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium text-sm flex items-center justify-center gap-2"
+                        className="px-4 py-3 bg-slate-700 hover:bg-red-900/40 text-slate-400 hover:text-red-400 rounded-xl font-medium text-sm flex items-center justify-center gap-2"
                      >
                         <Edit3 size={16} />
                         Edit Script
