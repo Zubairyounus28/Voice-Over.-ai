@@ -477,6 +477,23 @@ export const transcribeVideo = async (base64Video: string, mimeType: string) => 
 };
 
 /**
+ * Transcribes audio using Gemini 3 Flash.
+ */
+export const transcribeAudio = async (base64Audio: string, mimeType: string) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: {
+      parts: [
+        { inlineData: { mimeType, data: base64Audio } },
+        { text: "Accurately transcribe the following audio. If multiple speakers are present, indicate speaker turns." },
+      ],
+    },
+  });
+  return response.text;
+};
+
+/**
  * Translates script using Gemini 3 Flash.
  */
 export const translateScript = async (text: string, lang: string) => {

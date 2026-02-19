@@ -3,13 +3,14 @@ import React, { useState } from 'react';
 import { AppMode } from './types';
 import { VoiceOverPanel } from './components/VoiceOverPanel';
 import { VideoToTextPanel } from './components/VideoToTextPanel';
+import { AudioToTextPanel } from './components/AudioToTextPanel';
 import { VideoToMP3Panel } from './components/VideoToMP3Panel';
 import { VideoEnhancerPanel } from './components/VideoEnhancerPanel';
 import { ScriptToVideoPanel } from './components/ScriptToVideoPanel';
 import { AIStoryPanel } from './components/AIStoryPanel';
 import { AudioSplitterPanel } from './components/AudioSplitterPanel';
 import { ScriptToShortsPanel } from './components/ScriptToShortsPanel';
-import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap, Clapperboard, Video, Scissors, Layers, Music } from 'lucide-react';
+import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap, Clapperboard, Video, Scissors, Layers, Music, FileAudio } from 'lucide-react';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(AppMode.VOICE_OVER);
@@ -83,6 +84,17 @@ const App: React.FC = () => {
                 Video to Text
                 </button>
                 <button
+                onClick={() => setMode(AppMode.AUDIO_TO_TEXT)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                    mode === AppMode.AUDIO_TO_TEXT
+                    ? 'bg-slate-800 text-white shadow-sm ring-1 ring-cyan-500/50'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+                >
+                <FileAudio size={16} className="text-cyan-400" />
+                Audio to Text
+                </button>
+                <button
                 onClick={() => setMode(AppMode.VIDEO_TO_MP3)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     mode === AppMode.VIDEO_TO_MP3
@@ -154,7 +166,8 @@ const App: React.FC = () => {
        <div className="md:hidden px-6 py-2 bg-slate-900 border-b border-slate-800 overflow-x-auto flex gap-2">
             <button onClick={() => setMode(AppMode.VOICE_OVER)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VOICE_OVER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Voice Gen</button>
             <button onClick={() => setMode(AppMode.SCRIPT_TO_SHORTS)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.SCRIPT_TO_SHORTS ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Shorts</button>
-            <button onClick={() => setMode(AppMode.VIDEO_TO_TEXT)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_TO_TEXT ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>To Text</button>
+            <button onClick={() => setMode(AppMode.VIDEO_TO_TEXT)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_TO_TEXT ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>V-Text</button>
+            <button onClick={() => setMode(AppMode.AUDIO_TO_TEXT)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.AUDIO_TO_TEXT ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>A-Text</button>
             <button onClick={() => setMode(AppMode.VIDEO_TO_MP3)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_TO_MP3 ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>To MP3</button>
             <button onClick={() => setMode(AppMode.AI_STORY)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.AI_STORY ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Story</button>
             <button onClick={() => setMode(AppMode.VIDEO_ENHANCER)} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium ${mode === AppMode.VIDEO_ENHANCER ? 'bg-slate-800 text-white' : 'text-slate-400'}`}>Dubbing</button>
@@ -194,6 +207,16 @@ const App: React.FC = () => {
                 </p>
               </div>
               <VideoToTextPanel />
+            </div>
+          ) : mode === AppMode.AUDIO_TO_TEXT ? (
+            <div className="space-y-4">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-white mb-2 text-cyan-400">Audio Transcriber</h2>
+                <p className="text-slate-400 max-w-2xl">
+                  Turn your recordings, podcasts, or voice memos into clean text instantly. Powered by Gemini 3 Flash.
+                </p>
+              </div>
+              <AudioToTextPanel />
             </div>
           ) : mode === AppMode.VIDEO_TO_MP3 ? (
             <div className="space-y-4">
