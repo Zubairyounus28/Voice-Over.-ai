@@ -95,7 +95,7 @@ export const AVAILABLE_VOICES: VoiceOption[] = [
   { id: 'urdu_radio_male', name: 'Urdu Radio Commercial', gender: VoiceGender.MALE, description: 'Deep, resonant, high-impact radio voice', geminiVoiceName: 'Fenrir', recommendedPitch: -120, isUrdu: true },
   { id: 'v1', name: 'Deep Narrator', gender: VoiceGender.MALE, description: 'Authoritative, deep', geminiVoiceName: 'Fenrir', recommendedPitch: -200 },
   { id: 'v2', name: 'Standard Man', gender: VoiceGender.MALE, description: 'Conversational, clear', geminiVoiceName: 'Puck', recommendedPitch: 0 },
-  { id: 'urdu_comm_male', name: 'Urdu Commercial (Male)', gender: VoiceGender.MALE, description: 'Bold, professional, ad-style', geminiVoiceName: 'Fenrir', recommendedPitch: -80, isUrdu: true },
+  { id: 'urdu_comm_male', name: 'Urdu Commercial (Male)', gender: VoiceGender.MALE, description: 'Natural, professional, bold with high energy. Native ad-style.', geminiVoiceName: 'Fenrir', recommendedPitch: -80, isUrdu: true, stylePrompt: 'Speak as a native Urdu commercial voice artist. Use a bold, professional, and high-energy tone suitable for a high-impact advertisement. Maintain natural flow and native pronunciation.' },
   { id: 'urdu_male_narrator', name: 'Urdu Narrator (Male)', gender: VoiceGender.MALE, description: 'Deep, clear Urdu accent', geminiVoiceName: 'Fenrir', recommendedPitch: -50, isUrdu: true },
   { id: 'urdu_wise_old', name: 'Urdu Wise Elder', gender: VoiceGender.MALE, description: 'Relaxed, Grandfatherly', geminiVoiceName: 'Fenrir', recommendedPitch: -160, isUrdu: true },
   

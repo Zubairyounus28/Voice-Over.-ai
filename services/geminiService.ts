@@ -7,7 +7,7 @@ import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, SpeakingStyle, VoiceGender }
  */
 export const translateToUrdu = async (text: string, roman: boolean = true): Promise<string> => {
   if (!text.trim()) return "";
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const formatInstruction = roman 
     ? "Use ONLY Roman Urdu (Urdu words written in English/Latin alphabet). No Arabic script." 
     : "Use standard Urdu script.";
@@ -28,7 +28,7 @@ export const translateToUrdu = async (text: string, roman: boolean = true): Prom
  * Breaks a script into 5-second segments for video flow.
  */
 export const generateShortsSegments = async (script: string, characterDescription: string): Promise<{segments: {text: string, visual_prompt: string}[]}> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -82,7 +82,7 @@ export const generateShortsSegments = async (script: string, characterDescriptio
  * Optimizes script for TTS performance using Gemini 3 Flash.
  */
 export const optimizeScriptForSpeech = async (text: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -103,7 +103,7 @@ export const optimizeScriptForSpeech = async (text: string): Promise<string> => 
  * Analyzes an audio sample for AI voice cloning parameters.
  */
 export const analyzeVoiceSample = async (base64Audio: string, mimeType: string): Promise<any> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -136,17 +136,17 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
 
     const result = JSON.parse(response.text || "{}");
     return {
+      id: `cloned-${Date.now()}`,
+      ...result,
       name: `Cloned ${result.styleDescription?.split(' ')[0] || 'Voice'}`,
       description: result.styleDescription || "Custom cloned voice",
       stylePrompt: result.actingPrompt || "Speak naturally.",
-      baseVoice: result.baseVoice || "Puck",
-      pitch: result.pitch || 0,
+      geminiVoiceName: result.baseVoice || "Puck",
+      recommendedPitch: result.pitch || 0,
       gender: result.gender as VoiceGender || VoiceGender.MALE,
       age: result.age || "Adult",
       accent: result.accent || "Neutral",
       language: result.language || "English",
-      intonation: result.intonation,
-      rhythm: result.rhythm
     };
   } catch (error) {
     console.error("Voice analysis error:", error);
@@ -159,7 +159,7 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
  */
 export const generatePodcastScript = async (text: string, pairId: string, language: 'ENGLISH' | 'URDU'): Promise<string> => {
     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[0];
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const prompt = `Convert the following text into a natural, engaging podcast dialogue script between ${pair.speaker1.name} and ${pair.speaker2.name}. 
     ${language === 'URDU' ? "The dialogue must be in natural Roman Urdu (English alphabet only)." : "The dialogue must be in English."}
     Format: ${pair.speaker1.name}: [Line] ...
@@ -182,7 +182,7 @@ export const generatePodcastScript = async (text: string, pairId: string, langua
  */
 export const generateStoryScript = async (text: string, pairId: string, language: 'ENGLISH' | 'URDU'): Promise<string> => {
     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === pairId) || AVAILABLE_PODCAST_PAIRS[0]; 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const prompt = `Convert the following topic into a soothing bedtime story dialogue between ${pair.speaker1.name} and ${pair.speaker2.name}.
     ${language === 'URDU' ? "Use natural Roman Urdu (Urdu words written with English letters). No Arabic script." : "Use beautiful English."}
     Format strictly as:
@@ -206,7 +206,7 @@ export const generateStoryScript = async (text: string, pairId: string, language
  * Generates a Solo Bedtime Story script.
  */
 export const generateSoloStoryScript = async (text: string, language: 'ENGLISH' | 'URDU'): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const prompt = `Rewrite the following topic into a beautiful, engaging solo bedtime story narration for a child. 
   ${language === 'URDU' ? "IMPORTANT: Use natural ROMAN URDU (Urdu words written using the English/Latin alphabet). DO NOT use Arabic or Urdu script." : "Use magical English."}
   Make it descriptive, rhythmic, and soothing. 
@@ -228,7 +228,7 @@ export const generateSoloStoryScript = async (text: string, language: 'ENGLISH' 
  * Generates a short story title in Roman Urdu/Hindi.
  */
 export const generateStoryTitle = async (storyText: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -251,7 +251,7 @@ export const generateStoryTitle = async (storyText: string): Promise<string> => 
  * Generates YouTube SEO Metadata using Gemini 3 Flash.
  */
 export const generateYouTubeMetadata = async (storyText: string): Promise<{title: string, description: string, tags: string}> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   try {
       const response = await ai.models.generateContent({
           model: "gemini-3-flash-preview",
@@ -283,7 +283,7 @@ export const generateYouTubeMetadata = async (storyText: string): Promise<{title
  * Generates a descriptive visual prompt for video generation.
  */
 export const generateVisualPrompt = async (script: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -300,8 +300,8 @@ export const generateVisualPrompt = async (script: string): Promise<string> => {
  * Note: Users MUST select their own paid API key via aistudio.openSelectKey() before this can succeed.
  */
 export const generateVeoVideo = async (prompt: string, aspectRatio: '16:9' | '9:16' = '16:9'): Promise<string> => {
-  // Always initialize with the current process.env.API_KEY which might be updated via aistudio dialog
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Always initialize with the current process.env.GEMINI_API_KEY which might be updated via aistudio dialog
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   try {
     let operation = await ai.models.generateVideos({
       model: 'veo-3.1-fast-generate-preview',
@@ -323,7 +323,7 @@ export const generateVeoVideo = async (prompt: string, aspectRatio: '16:9' | '9:
     if (!downloadLink) throw new Error("Video generation failed: No video URI returned from the operation.");
 
     // The downloadLink returns MP4 bytes; must append the API key as a query parameter.
-    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    const response = await fetch(`${downloadLink}&key=${process.env.GEMINI_API_KEY}`);
     if (!response.ok) throw new Error(`Failed to download generated video: ${response.statusText}`);
     
     const blob = await response.blob();
@@ -341,7 +341,7 @@ export const generateVeoVideo = async (prompt: string, aspectRatio: '16:9' | '9:
  * Generates Pixar-style story image using Gemini 2.5 Flash Image.
  */
 export const generateStoryImage = async (storyText: string, aspectRatio: "9:16" | "16:9"): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     try {
         const prompt = `Pixar-style 3D digital illustration for: "${storyText.substring(0, 400)}". Magical, vibrant, kid-friendly. No text in image. Aspect ratio: ${aspectRatio}.`;
         const response = await ai.models.generateContent({
@@ -368,102 +368,119 @@ export const generateSpeech = async (
     style: SpeakingStyle = SpeakingStyle.STANDARD,
     customVoiceData?: any 
 ) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const model = "gemini-2.5-flash-preview-tts";
-  
-  let config: any = { responseModalities: [Modality.AUDIO] };
-  let finalPrompt = text;
+  const maxRetries = 2;
+  let lastError: any = null;
 
-  // Handle Multi-Speaker (Story/Podcast)
-  if (style === SpeakingStyle.PODCAST || style === SpeakingStyle.STORY) {
-     const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === voiceOrPairId) || AVAILABLE_PODCAST_PAIRS[0];
-     
-     config.speechConfig = {
-        multiSpeakerVoiceConfig: {
-            speakerVoiceConfigs: [
-                {
-                    speaker: pair.speaker1.name,
-                    voiceConfig: { prebuiltVoiceConfig: { voiceName: pair.speaker1.voiceName } }
-                },
-                {
-                    speaker: pair.speaker2.name,
-                    voiceConfig: { prebuiltVoiceConfig: { voiceName: pair.speaker2.voiceName } }
-                }
-            ]
-        }
-     };
-
-     if (style === SpeakingStyle.STORY) {
-        const parentRole = (pair.speaker1.name === 'Mom' || pair.speaker1.name === 'Mother') ? 'Mother' : 'Father';
-        const pDesc = parentRole === 'Father' ? 'Adult Male, Deep, Very Low Pitch, Mature' : 'Adult Female, Warm, Mature, Calm';
-        const cDesc = 'Child, Very High Pitch, Energetic, Small Boy/Girl Voice';
-
-        finalPrompt = `ACTORS:
-        1. ${pair.speaker1.name}: ${pDesc}.
-        2. ${pair.speaker2.name}: ${cDesc}.
-        
-        NARRATE DIALOGUE:
-        ${text}`;
-     } else {
-        finalPrompt = `TTS CONVERSATION:\n${text}`;
-     }
-
-  } else {
-      // Single Speaker
-      let voice = AVAILABLE_VOICES.find(v => v.id === voiceOrPairId) || customVoiceData || AVAILABLE_VOICES[0];
-      config.speechConfig = {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: voice.geminiVoiceName } },
-      };
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const model = "gemini-2.5-flash-preview-tts";
       
-      if (style === SpeakingStyle.SOLO_STORY) {
-          finalPrompt = `ACT AS A STORYTELLER. Speak in a soothing, expressive, and rhythmic way for a child's bedtime story. NARRATE: ${text}`;
+      let config: any = { responseModalities: [Modality.AUDIO] };
+      let finalPrompt = text;
+
+      // Handle Multi-Speaker (Story/Podcast)
+      if (style === SpeakingStyle.PODCAST || style === SpeakingStyle.STORY) {
+         const pair = AVAILABLE_PODCAST_PAIRS.find(p => p.id === voiceOrPairId) || AVAILABLE_PODCAST_PAIRS[0];
+         
+         config.speechConfig = {
+            multiSpeakerVoiceConfig: {
+                speakerVoiceConfigs: [
+                    {
+                        speaker: pair.speaker1.name,
+                        voiceConfig: { prebuiltVoiceConfig: { voiceName: pair.speaker1.voiceName } }
+                    },
+                    {
+                        speaker: pair.speaker2.name,
+                        voiceConfig: { prebuiltVoiceConfig: { voiceName: pair.speaker2.voiceName } }
+                    }
+                ]
+            }
+         };
+
+         if (style === SpeakingStyle.STORY) {
+            finalPrompt = `TTS the following bedtime story conversation between ${pair.speaker1.name} and ${pair.speaker2.name}:\n${text}`;
+         } else {
+            finalPrompt = `TTS the following podcast conversation between ${pair.speaker1.name} and ${pair.speaker2.name}:\n${text}`;
+         }
+
       } else {
-          finalPrompt = text;
+          // Single Speaker
+          let voice = AVAILABLE_VOICES.find(v => v.id === voiceOrPairId) || customVoiceData || AVAILABLE_VOICES[0];
+          config.speechConfig = {
+              voiceConfig: { prebuiltVoiceConfig: { voiceName: voice.geminiVoiceName } },
+          };
+          
+          if (style === SpeakingStyle.SOLO_STORY) {
+              finalPrompt = `Say this as a soothing storyteller: ${text}`;
+          } else if (voice.stylePrompt) {
+              finalPrompt = `Instruction: ${voice.stylePrompt}\nText to speak: ${text}`;
+          } else {
+              finalPrompt = `Say: ${text}`;
+          }
       }
-  }
 
-  try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: [{ parts: [{ text: finalPrompt }] }],
-      config: config,
-    });
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: [{ parts: [{ text: finalPrompt }] }],
+        config: config,
+      });
 
-    const candidate = response.candidates?.[0];
-    if (!candidate) throw new Error("No candidates returned from AI model.");
+      const candidate = response.candidates?.[0];
+      if (!candidate) throw new Error("No candidates returned from AI model.");
 
-    const parts = candidate.content?.parts || [];
-    let audioData = null;
-    let refusalText = "";
-
-    // Iterate through all parts to find audio data, as the model might return text + audio
-    for (const part of parts) {
-      if (part.inlineData?.data) {
-        audioData = part.inlineData.data;
-      } else if (part.text) {
-        refusalText += part.text;
+      if (candidate.finishReason && candidate.finishReason !== 'STOP' && candidate.finishReason !== 'MAX_TOKENS') {
+         throw new Error(`AI Generation failed with reason: ${candidate.finishReason}`);
       }
+
+      if (!candidate.content) {
+         throw new Error(`AI model returned a candidate with no content. Finish reason: ${candidate.finishReason}`);
+      }
+
+      const parts = candidate.content.parts || [];
+      if (parts.length === 0) {
+        throw new Error(`AI model returned a candidate with no parts. Finish reason: ${candidate.finishReason}`);
+      }
+
+      let audioData = null;
+      let refusalText = "";
+
+      for (const part of parts) {
+        if (part.inlineData?.data) {
+          audioData = part.inlineData.data;
+        } else if (part.text) {
+          refusalText += part.text;
+        }
+      }
+
+      if (audioData) return audioData;
+
+      if (refusalText) {
+          throw new Error(`AI Refusal: ${refusalText}`);
+      }
+
+      throw new Error("No audio data returned from model.");
+    } catch (error: any) {
+      lastError = error;
+      console.error(`Speech Gen Attempt ${attempt + 1} failed:`, error);
+      
+      // Retry on OTHER or transient-looking errors
+      if ((error.message.includes("OTHER") || error.message.includes("fetch")) && attempt < maxRetries) {
+        const delay = 2000 * (attempt + 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw new Error(error.message || "Speech generation failed.");
     }
-
-    if (audioData) return audioData;
-
-    // If no audio was found, but text was returned, it's likely a safety refusal or error message
-    if (refusalText) {
-        throw new Error(`AI Refusal: ${refusalText}`);
-    }
-
-    throw new Error("No audio data returned from model.");
-  } catch (error: any) {
-    console.error("Speech Gen Error:", error);
-    throw new Error(error.message || "Speech generation failed.");
   }
+  throw lastError;
 };
 
 /**
  * Transcribes video using Gemini 3 Flash.
  */
 export const transcribeVideo = async (base64Video: string, mimeType: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: {
@@ -480,7 +497,7 @@ export const transcribeVideo = async (base64Video: string, mimeType: string) => 
  * Transcribes audio using Gemini 3 Flash.
  */
 export const transcribeAudio = async (base64Audio: string, mimeType: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: {
@@ -497,7 +514,7 @@ export const transcribeAudio = async (base64Audio: string, mimeType: string) => 
  * Translates script using Gemini 3 Flash.
  */
 export const translateScript = async (text: string, lang: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: [{ parts: [{ text: `Translate this to ${lang}: ${text}` }] }],
@@ -509,7 +526,7 @@ export const translateScript = async (text: string, lang: string) => {
  * Improves script style using Gemini 3 Flash.
  */
 export const improveScript = async (text: string, style: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: [{ parts: [{ text: `Improve this script for ${style}: ${text}` }] }],
