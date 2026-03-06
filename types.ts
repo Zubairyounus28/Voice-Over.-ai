@@ -13,6 +13,7 @@ export enum SpeakingStyle {
   PODCAST = 'PODCAST',
   STORY = 'STORY',
   SOLO_STORY = 'SOLO_STORY',
+  CORPORATE = 'CORPORATE',
 }
 
 export enum AppMode {
@@ -96,6 +97,7 @@ export const AVAILABLE_VOICES: VoiceOption[] = [
   { id: 'v1', name: 'Deep Narrator', gender: VoiceGender.MALE, description: 'Authoritative, deep', geminiVoiceName: 'Fenrir', recommendedPitch: -200 },
   { id: 'v2', name: 'Standard Man', gender: VoiceGender.MALE, description: 'Conversational, clear', geminiVoiceName: 'Puck', recommendedPitch: 0 },
   { id: 'urdu_comm_male', name: 'Urdu Commercial (Male)', gender: VoiceGender.MALE, description: 'Natural, professional, bold with high energy. Native ad-style.', geminiVoiceName: 'Fenrir', recommendedPitch: -80, isUrdu: true, stylePrompt: 'Speak as a native Urdu commercial voice artist. Use a bold, professional, and high-energy tone suitable for a high-impact advertisement. Maintain natural flow and native pronunciation.' },
+  { id: 'urdu_corporate_male', name: 'Urdu Corporate Intro', gender: VoiceGender.MALE, description: 'Smooth, energetic, professional company intro voice.', geminiVoiceName: 'Fenrir', recommendedPitch: -60, isUrdu: true, stylePrompt: 'Speak as a professional corporate narrator in native Pakistani Urdu. Use a smooth, energetic, and confident tone suitable for a company introduction. Maintain a realistic native accent with clear articulation.' },
   { id: 'urdu_male_narrator', name: 'Urdu Narrator (Male)', gender: VoiceGender.MALE, description: 'Deep, clear Urdu accent', geminiVoiceName: 'Fenrir', recommendedPitch: -50, isUrdu: true },
   { id: 'urdu_wise_old', name: 'Urdu Wise Elder', gender: VoiceGender.MALE, description: 'Relaxed, Grandfatherly', geminiVoiceName: 'Fenrir', recommendedPitch: -160, isUrdu: true },
   

@@ -413,6 +413,8 @@ export const generateSpeech = async (
           
           if (style === SpeakingStyle.SOLO_STORY) {
               finalPrompt = `Say this as a soothing storyteller: ${text}`;
+          } else if (style === SpeakingStyle.CORPORATE) {
+              finalPrompt = `ACT AS A PROFESSIONAL CORPORATE NARRATOR. Use a smooth, energetic, and confident tone for a company introduction. Maintain a realistic native accent. NARRATE: ${text}`;
           } else if (voice.stylePrompt) {
               finalPrompt = `Instruction: ${voice.stylePrompt}\nText to speak: ${text}`;
           } else {

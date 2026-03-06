@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Wand2, Mic, User, Smile, BookOpen, Globe, Users, Sparkles, RefreshCw, MoonStar, Image as ImageIcon, Video, FileText, Youtube, Hash, Copy, Check, Fingerprint } from 'lucide-react';
+import { Play, Pause, Download, Wand2, Mic, User, Smile, BookOpen, Globe, Users, Sparkles, RefreshCw, MoonStar, Image as ImageIcon, Video, FileText, Youtube, Hash, Copy, Check, Fingerprint, Briefcase, Zap } from 'lucide-react';
 import { AVAILABLE_VOICES, AVAILABLE_PODCAST_PAIRS, VoiceOption, VoiceGender, SpeakingStyle } from '../types';
 import { generateSpeech, translateToUrdu, generatePodcastScript, generateStoryScript, generateSoloStoryScript, analyzeVoiceSample, optimizeScriptForSpeech, generateStoryImage, generateStoryTitle, generateYouTubeMetadata } from '../services/geminiService';
 import { decodeBase64, decodeAudioData, audioBufferToWav, fileToBase64 } from '../utils/audioUtils';
@@ -266,6 +266,7 @@ export const VoiceOverPanel: React.FC = () => {
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { id: SpeakingStyle.STANDARD, label: 'Single Voice', icon: Mic },
+                  { id: SpeakingStyle.CORPORATE, label: 'Corporate', icon: Briefcase },
                   { id: SpeakingStyle.SOLO_STORY, label: 'Solo Story', icon: BookOpen },
                   { id: SpeakingStyle.STORY, label: 'Story Duo', icon: MoonStar },
                   { id: SpeakingStyle.PODCAST, label: 'Podcast Duo', icon: Users },
@@ -278,7 +279,7 @@ export const VoiceOverPanel: React.FC = () => {
               </div>
             </section>
 
-            {(speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.SOLO_STORY) && (
+            {(speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.PODCAST || speakingStyle === SpeakingStyle.SOLO_STORY || speakingStyle === SpeakingStyle.CORPORATE) && (
               <section className="animate-fade-in space-y-4">
                  <div className="flex items-center justify-between">
                     <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Language Choice</h3>
@@ -287,6 +288,17 @@ export const VoiceOverPanel: React.FC = () => {
                        <button onClick={() => setPodcastLang('URDU')} className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${podcastLang === 'URDU' ? 'bg-green-600 text-white' : 'text-slate-400'}`}>ROMAN URDU</button>
                     </div>
                  </div>
+                 
+                 {speakingStyle === SpeakingStyle.CORPORATE && (
+                   <div className="bg-indigo-600/10 border border-indigo-500/30 p-3 rounded-xl">
+                      <div className="text-[10px] font-bold text-indigo-400 uppercase mb-1 flex items-center gap-1">
+                        <Zap size={10} /> Corporate Mode Active
+                      </div>
+                      <p className="text-[9px] text-slate-400 leading-relaxed">
+                        Optimized for company intros and commercials. Use the <b>Urdu Corporate Intro</b> voice for best results. Background music can be added in post-production.
+                      </p>
+                   </div>
+                 )}
                  
                  {(speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.PODCAST) && (
                    <div className="space-y-2">
