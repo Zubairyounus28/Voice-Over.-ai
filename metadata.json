@@ -1,5 +1,6 @@
 {
   "name": "VoxStudio AI",
   "description": "Professional AI Voice Over generator with pitch control and Video-to-Text transcription capabilities.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
