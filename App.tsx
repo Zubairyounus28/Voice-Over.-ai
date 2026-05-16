@@ -11,8 +11,7 @@ import { AIStoryPanel } from './components/AIStoryPanel';
 import { AudioSplitterPanel } from './components/AudioSplitterPanel';
 import { ScriptToShortsPanel } from './components/ScriptToShortsPanel';
 import { AudioEnhancerPanel } from './components/AudioEnhancerPanel';
-import { TeacherPanel } from './components/TeacherPanel';
-import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap, Clapperboard, Video, Scissors, Layers, Music, FileAudio, Headphones, GraduationCap } from 'lucide-react';
+import { Mic, FileVideo, Sparkles, Wand2, Heart, X, Copy, Zap, Clapperboard, Video, Scissors, Layers, Music, FileAudio, Headphones } from 'lucide-react';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(AppMode.VOICE_OVER);
@@ -152,17 +151,6 @@ const App: React.FC = () => {
                 Audio Mixer
                 </button>
                 <button
-                onClick={() => setMode(AppMode.TEACHER)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-                    mode === AppMode.TEACHER
-                    ? 'bg-slate-800 text-white shadow-sm ring-1 ring-yellow-500/50'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-                >
-                <GraduationCap size={16} className="text-yellow-400" />
-                AI Teacher
-                </button>
-                <button
                 onClick={() => setMode(AppMode.AUDIO_SPLITTER)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     mode === AppMode.AUDIO_SPLITTER
@@ -252,16 +240,6 @@ const App: React.FC = () => {
                 </p>
               </div>
               <VideoToMP3Panel />
-            </div>
-          ) : mode === AppMode.TEACHER ? (
-            <div className="space-y-4">
-              <div className="mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2 text-yellow-400">AI Urdu Teacher</h2>
-                <p className="text-slate-400 max-w-2xl">
-                  Convert complex English lessons into easy Urdu explanations. Learn better with professional teaching styles, examples, and voice narration.
-                </p>
-              </div>
-              <TeacherPanel />
             </div>
           ) : mode === AppMode.AUDIO_SPLITTER ? (
             <div className="space-y-4">

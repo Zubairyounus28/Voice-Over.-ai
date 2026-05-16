@@ -27,7 +27,6 @@ export enum AppMode {
   AUDIO_SPLITTER = 'AUDIO_SPLITTER',
   SCRIPT_TO_SHORTS = 'SCRIPT_TO_SHORTS',
   AUDIO_ENHANCER = 'AUDIO_ENHANCER',
-  TEACHER = 'TEACHER',
 }
 
 export interface VideoCharacter {
