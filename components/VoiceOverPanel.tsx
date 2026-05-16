@@ -104,7 +104,13 @@ export const VoiceOverPanel: React.FC = () => {
       }
 
       if (speakingStyle === SpeakingStyle.STORY || speakingStyle === SpeakingStyle.SOLO_STORY) {
-          if (results[1]) setStoryImageUrl(`data:image/png;base64,${results[1]}`);
+          if (results[1]) {
+            if (results[1].startsWith('EXTERNAL_URL:')) {
+              setStoryImageUrl(results[1].replace('EXTERNAL_URL:', ''));
+            } else {
+              setStoryImageUrl(`data:image/png;base64,${results[1]}`);
+            }
+          }
           if (results[2]) setStoryTitle(results[2]);
           if (results[3]) setYoutubeMeta(results[3]);
       }
@@ -186,6 +192,7 @@ export const VoiceOverPanel: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.src = storyImageUrl;
     await new Promise(r => img.onload = r);
     canvas.width = aspectRatio === "9:16" ? 720 : 1280;

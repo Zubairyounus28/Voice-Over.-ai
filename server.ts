@@ -3,7 +3,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import axios from "axios";
-import { generateTeacherLesson, generateTeacherMeta, generateSpeech } from "./services/geminiService";
+import { generateTeacherLesson, generateSpeech } from "./services/geminiService";
 
 async function startServer() {
   const app = express();
@@ -48,16 +48,6 @@ async function startServer() {
       const { topic } = req.body;
       const lesson = await generateTeacherLesson(topic);
       res.json({ lesson });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/teacher/generate-thumbnail", async (req, res) => {
-    try {
-      const { lesson } = req.body;
-      const result = await generateTeacherMeta(lesson);
-      res.json(result);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

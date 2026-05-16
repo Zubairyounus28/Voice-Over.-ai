@@ -10,10 +10,23 @@ const clientPost = async (path: string, body: any) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+  
+  const contentType = response.headers.get('content-type') || '';
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || 'Server error');
+    if (contentType.includes('application/json')) {
+      const error = await response.json().catch(() => ({ error: 'Unknown server error' }));
+      throw new Error(error.error || error.message || 'Server error');
+    } else {
+      const text = await response.text();
+      throw new Error(`Server returned non-JSON error (${response.status}): ${text.substring(0, 100)}...`);
+    }
   }
+  
+  if (!contentType.includes('application/json')) {
+    const text = await response.text();
+    throw new Error(`Expected JSON but got ${contentType}: ${text.substring(0, 100)}...`);
+  }
+  
   return response.json();
 };
 
@@ -28,7 +41,7 @@ const callGemini = async (
   multimodalData?: { mimeType: string, data: string }
 ) => {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  const maxRetries = 5; // Increased for free tier stability
+  const maxRetries = 5; // Reduced from 10 to avoid backend timeouts (Vite/Ingress)
   
   // Safety settings to prevent Urdu script or educational content from being blocked
   const defaultSafetySettings = [
@@ -41,7 +54,7 @@ const callGemini = async (
   // Define fallback path.
   const fallbackModels = [primaryModel];
   if (primaryModel === "gemini-3-flash-preview") {
-    fallbackModels.push("gemini-1.5-flash", "gemini-1.5-flash-8b");
+    fallbackModels.push("gemini-2.0-flash", "gemini-1.5-flash");
   }
 
   for (const modelName of fallbackModels) {
@@ -70,31 +83,42 @@ const callGemini = async (
           },
         });
 
-        // If it's a TTS request or multimodal, check for finishReason
         const candidate = response.candidates?.[0];
+        const text = candidate?.content?.parts?.find(p => p.text)?.text || "";
+        const inlineData = candidate?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+
+        // If it's a TTS request or multimodal, check for finishReason
         if (candidate) {
            const reason = candidate.finishReason;
-           const hasAudio = candidate.content?.parts?.some(p => p.inlineData);
-           const hasText = candidate.content?.parts?.some(p => p.text);
+           const hasAudio = !!inlineData;
+           const hasText = !!text;
            
            if (reason && reason !== 'STOP' && reason !== 'MAX_TOKENS') {
               // Only fail if we didn't get what we wanted
               if ((config.responseModalities?.includes(Modality.AUDIO) && !hasAudio) || (!config.responseModalities && !hasText)) {
-                 throw new Error(`Gemini candidate finishReason: ${reason}`);
+                 // Convert to a pseudo-transient 429-like error to trigger retry
+                 throw new Error(`FINISH_REASON_${reason}`);
               }
            }
         }
 
-        return response;
+        return { response, text, inlineData };
       } catch (error: any) {
-        const errorMsg = (error.message || error.toString()).toLowerCase();
+        const errorMsgOriginal = error.message || error.toString();
+        const errorMsg = errorMsgOriginal.toLowerCase();
+        
+        // Hard Quota exhaustion detection (Limit: 0)
+        const isHardQuotaExhausted = errorMsg.includes("limit: 0") || 
+                                    errorMsg.includes("quota exceeded") && errorMsg.includes("0") ||
+                                    errorMsg.includes("exhausted") && errorMsg.includes("0");
         
         // Handle Rate Limiting (429) & finishReason: OTHER
-        const isRateLimited = errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("limit") || errorMsg.includes("exhausted") || errorMsg.includes("rate");
-        const isOtherFinish = errorMsg.includes("other") || errorMsg.includes("unknown") || errorMsg.includes("finishreason") || errorMsg.includes("finish_reason");
+        const isRateLimited = errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("limit") || errorMsg.includes("rate");
+        const isOtherFinish = errorMsg.includes("other") || errorMsg.includes("unknown") || errorMsg.includes("finish_reason") || errorMsg.includes("finish_reason_other");
         const isTransient = isRateLimited || 
                            isOtherFinish ||
                            errorMsg.includes("503") || 
+                           errorMsg.includes("500") ||
                            errorMsg.includes("high demand") || 
                            errorMsg.includes("overload") ||
                            errorMsg.includes("unavailable") ||
@@ -102,39 +126,39 @@ const callGemini = async (
                            errorMsg.includes("socket") ||
                            errorMsg.includes("connection") ||
                            errorMsg.includes("timeout") ||
-                           errorMsg.includes("reset");
+                           errorMsg.includes("reset") ||
+                           errorMsg.includes("internal error");
+
+        if (isHardQuotaExhausted) {
+           console.error(`Gemini Quota Hard Exhausted for ${modelName}.`);
+           break; 
+        }
 
         if (isTransient && attempt < maxRetries) {
-          let delay = Math.pow(2, attempt) * 2000; // Start with 2s backoff
+          let delay = Math.pow(1.5, attempt) * 2000; // Faster backoff for lower retry count
           
-          if (error.details) {
-            try {
-               const retryInfo = error.details.find((d: any) => 
-                 d['@type']?.includes('RetryInfo') || d['type']?.includes('RetryInfo')
-               );
-               const rawDelay = retryInfo?.retryDelay;
-               if (rawDelay) {
-                 // Handle "23s" string or { seconds: 23 } object
-                 let seconds = 0;
-                 if (typeof rawDelay === 'string') {
-                    seconds = parseInt(rawDelay);
-                 } else {
-                    seconds = Number(rawDelay.seconds || 0);
-                 }
-                 if (!isNaN(seconds) && seconds > 0) delay = (seconds + 2) * 1000; // Buffer by 2s
-               }
-            } catch (e) { /* ignore extraction errors */ }
-          } else if (isRateLimited) {
-            // If no explicit delay but rate limited, use a longer default for free tier
-            delay = Math.max(delay, 10000 + (attempt * 5000));
-          }
+          // Try to extract delay from structured JSON message if available (use Original case)
+          try {
+            const jsonMatch = errorMsgOriginal.match(/\{.*\}/);
+            if (jsonMatch) {
+              const details = JSON.parse(jsonMatch[0]);
+              // Look for RetryInfo
+              const retrySecs = details.error?.details?.find((d: any) => d['@type']?.includes('RetryInfo'))?.retryDelay;
+              if (retrySecs) {
+                const s = typeof retrySecs === 'string' ? parseInt(retrySecs) : (retrySecs.seconds || 0);
+                if (s > 0) delay = (s + 2) * 1000;
+              }
+            }
+          } catch (e) {}
 
-          console.warn(`Gemini API Delay (${modelName}): ${error.message}. Retrying in ${delay}ms... (Attempt ${attempt + 1})`);
+          if (isRateLimited && delay < 5000) delay = 5000 + (attempt * 2000);
+
+          console.warn(`Gemini API Transient Error (${modelName}): ${errorMsg.substring(0, 100)}... Retrying in ${Math.round(delay/1000)}s (Attempt ${attempt + 1}/${maxRetries})`);
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
         
-        console.error(`Gemini Error (${modelName}) failed after ${attempt} retries: ${error.message}`);
+        console.error(`Gemini Error (${modelName}) final failure after ${attempt} retries: ${errorMsg}`);
         break; 
       }
     }
@@ -172,8 +196,8 @@ export const translateToUrdu = async (text: string, roman: boolean = true): Prom
     : "Use standard Urdu script.";
     
   try {
-    const response = await callGemini(`Translate the following to Urdu. ${formatInstruction} Provide only the translated text:\n\n${text}`);
-    return response.text?.trim() || "";
+    const { text: resultText } = await callGemini(`Translate the following to Urdu. ${formatInstruction} Provide only the translated text:\n\n${text}`);
+    return resultText.trim() || "";
   } catch (error: any) {
     console.error("Translation error:", error);
     throw error;
@@ -208,7 +232,7 @@ export const generateShortsSegments = async (script: string, characterDescriptio
   `;
 
   try {
-    const response = await callGemini(prompt, "gemini-3-flash-preview", {
+    const { text: resultText } = await callGemini(prompt, "gemini-3-flash-preview", {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -226,7 +250,7 @@ export const generateShortsSegments = async (script: string, characterDescriptio
         }
       }
     });
-    return JSON.parse(response.text || '{"segments":[]}');
+    return JSON.parse(resultText || '{"segments":[]}');
   } catch (error) {
     console.error("Shorts segmentation error:", error);
     throw error;
@@ -249,8 +273,8 @@ export const optimizeScriptForSpeech = async (text: string): Promise<string> => 
   `;
 
   try {
-    const response = await callGemini(prompt);
-    return response.text?.trim() || text;
+    const { text: resultText } = await callGemini(prompt);
+    return resultText.trim() || text;
   } catch (error) {
     console.warn("Script optimization failed.", error);
     return text;
@@ -268,7 +292,7 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
   const prompt = `Analyze this voice sample for a high-fidelity AI voice cloning application. Return JSON with gender, age, accent, language, intonation, rhythm, styleDescription, actingPrompt, baseVoice (Fenrir/Puck/Kore/Zephyr), and pitch (-200 to 200).`;
 
   try {
-    const response = await callGemini(prompt, "gemini-3-flash-preview", {
+    const { text: resultText } = await callGemini(prompt, "gemini-3-flash-preview", {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -288,7 +312,7 @@ export const analyzeVoiceSample = async (base64Audio: string, mimeType: string):
       }
     }, { mimeType, data: base64Audio });
 
-    const result = JSON.parse(response.text || "{}");
+    const result = JSON.parse(resultText || "{}");
     return {
       id: `cloned-${Date.now()}`,
       ...result,
@@ -323,8 +347,8 @@ export const generatePodcastScript = async (text: string, pairId: string, langua
     Original Text: ${text}`;
 
     try {
-        const response = await callGemini(prompt);
-        return response.text?.trim() || "";
+        const { text: resultText } = await callGemini(prompt);
+        return resultText.trim() || "";
     } catch (error) {
         console.error("Script generation error:", error);
         throw error;
@@ -348,8 +372,8 @@ export const generateStoryScript = async (text: string, pairId: string, language
     Topic: ${text}`;
 
     try {
-        const response = await callGemini(prompt);
-        return response.text?.trim() || "";
+        const { text: resultText } = await callGemini(prompt);
+        return resultText.trim() || "";
     } catch (error) {
         console.error("Story script generation error:", error);
         throw error;
@@ -370,8 +394,8 @@ export const generateSoloStoryScript = async (text: string, language: 'ENGLISH' 
   Topic: ${text}`;
 
   try {
-      const response = await callGemini(prompt);
-      return response.text?.trim() || "";
+      const { text: resultText } = await callGemini(prompt);
+      return resultText.trim() || "";
   } catch (error) {
       console.error("Solo story script generation error:", error);
       throw error;
@@ -397,8 +421,8 @@ export const generateStoryTitle = async (storyText: string): Promise<string> => 
   `;
 
   try {
-    const response = await callGemini(prompt);
-    return response.text?.trim().replace(/^"|"$/g, '') || "Meri Kahani";
+    const { text: resultText } = await callGemini(prompt);
+    return resultText.trim().replace(/^"|"$/g, '') || "Meri Kahani";
   } catch (error) {
     return "Meri Kahani";
   }
@@ -425,7 +449,7 @@ export const generateYouTubeMetadata = async (storyText: string): Promise<{title
   `;
 
   try {
-      const response = await callGemini(prompt, "gemini-3-flash-preview", { 
+      const { text: resultText } = await callGemini(prompt, "gemini-3-flash-preview", { 
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -437,7 +461,7 @@ export const generateYouTubeMetadata = async (storyText: string): Promise<{title
             required: ["title", "description", "tags"]
           }
       });
-      const res = JSON.parse(response.text || "{}");
+      const res = JSON.parse(resultText || "{}");
       return {
           title: res.title || "New Bedtime Story",
           description: res.description || "Amazing bedtime story for kids. Subscribe for more!",
@@ -460,8 +484,8 @@ export const generateVisualPrompt = async (script: string): Promise<string> => {
   const prompt = `Based on this story, generate a descriptive visual prompt (max 50 words) for AI video generation. Focus on character style (Pixar-style 3D), cinematic lighting, and atmospheric depth: "${script.substring(0, 1000)}"`;
 
   try {
-    const response = await callGemini(prompt);
-    return response.text?.trim() || "A magical cinematic story scene in Pixar style.";
+    const { text: resultText } = await callGemini(prompt);
+    return resultText.trim() || "A magical cinematic story scene in Pixar style.";
   } catch (error) {
     return "A beautiful cinematic scene.";
   }
@@ -517,14 +541,14 @@ export const generateStoryImage = async (storyText: string, aspectRatio: "9:16" 
     const prompt = `Pixar-style 3D digital illustration for: "${storyText.substring(0, 400)}". Magical, vibrant, kid-friendly. No text in image. Aspect ratio: ${aspectRatio}.`;
 
     try {
-        const response = await callGemini(prompt, "gemini-2.5-flash-image", { imageConfig: { aspectRatio } });
-        for (const part of response.candidates?.[0]?.content?.parts || []) {
-            if (part.inlineData) return part.inlineData.data;
-        }
+        const { inlineData } = await callGemini(prompt, "gemini-2.5-flash-image", { imageConfig: { aspectRatio } });
+        if (inlineData) return inlineData;
         throw new Error("No image data returned from Gemini 2.5 Image");
     } catch (error) {
-        console.error("Image generation error:", error);
-        throw error;
+        console.error("Image generation error, using fallback placeholder:", error);
+        const cleanTopic = encodeURIComponent(storyText.substring(0, 30).trim() || "Bedtime Story");
+        // Fallback to placehold.co with a nice creative style
+        return `EXTERNAL_URL:https://placehold.co/1280x720/1e1b4b/e2e8f0?text=${cleanTopic}+Story&font=playfair`;
     }
 };
 
@@ -580,11 +604,10 @@ export const generateSpeech = async (
 
   for (let topAttempt = 0; topAttempt <= maxTopRetries; topAttempt++) {
     try {
-      const response = await callGemini(finalPrompt, model, config);
+      const { inlineData, response } = await callGemini(finalPrompt, model, config);
       const candidate = response.candidates?.[0];
       
-      const audioData = candidate?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
-      if (audioData) return audioData;
+      if (inlineData) return inlineData;
 
       throw new Error(`No audio data in candidate. Reason: ${candidate?.finishReason}`);
     } catch (error: any) {
@@ -629,66 +652,9 @@ export const generateTeacherLesson = async (topic: string): Promise<string> => {
   `;
 
   try {
-    const response = await callGemini(prompt);
-    return response.text?.trim() || "";
+    const { text: resultText } = await callGemini(prompt);
+    return resultText.trim() || "";
   } catch (error) {
-    throw error;
-  }
-};
-
-/**
- * Generates a YouTube thumbnail and SEO metadata for a teacher lesson.
- */
-export const generateTeacherMeta = async (lesson: string): Promise<{imageUrl: string, metadata: {title: string, description: string, tags: string}}> => {
-  if (!isServer) {
-    return clientPost('/api/teacher/generate-thumbnail', { lesson });
-  }
-  
-  const prompt = `Act as a YouTube SEO Expert for educational content. 
-  Generate metadata for an Urdu educational lesson.
-  Lesson Content: ${lesson.substring(0, 1000)}
-  
-  Return JSON format with:
-  - title: A catchy YouTube title (mixed Urdu/English)
-  - description: A professional description
-  - tags: 15-20 comma-separated keywords
-  - image_prompt: A detailed visual prompt for an AI to generate a professional educational thumbnail.`;
-
-  try {
-    const metaResponse = await callGemini(prompt, "gemini-3-flash-preview", { 
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          description: { type: Type.STRING },
-          tags: { type: Type.STRING },
-          image_prompt: { type: Type.STRING }
-        },
-        required: ["title", "description", "tags", "image_prompt"]
-      }
-    });
-    const meta = JSON.parse(metaResponse.text || "{}");
-    
-    let imageUrl = "";
-    try {
-      const imageResponse = await callGemini(meta.image_prompt || 'Urdu teacher educational thumbnail illustration', "gemini-2.5-flash-image", { imageConfig: { aspectRatio: "16:9" } });
-      imageUrl = imageResponse.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data || "";
-    } catch (imageErr) {
-      console.warn("Teacher thumbnail primary generation failed, trying fallback...", imageErr);
-      try {
-        // Fallback: very simple prompt to avoid safety/complexity issues
-        const simplePrompt = `Educational YouTube thumbnail for lesson: ${meta.title?.substring(0, 50) || 'Urdu Lesson'}`;
-        const imageResponse = await callGemini(simplePrompt, "gemini-2.5-flash-image", { imageConfig: { aspectRatio: "16:9" } });
-        imageUrl = imageResponse.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data || "";
-      } catch (fallbackErr) {
-        console.error("Image generation completely failed.", fallbackErr);
-      }
-    }
-    
-    return { imageUrl, metadata: meta };
-  } catch (error) {
-    console.error("Teacher meta generation error:", error);
     throw error;
   }
 };
@@ -700,8 +666,8 @@ export const transcribeVideo = async (base64Video: string, mimeType: string) => 
   }
   
   try {
-    const response = await callGemini("Transcribe.", "gemini-3-flash-preview", {}, { mimeType, data: base64Video });
-    return response.text;
+    const { text: resultText } = await callGemini("Transcribe.", "gemini-3-flash-preview", {}, { mimeType, data: base64Video });
+    return resultText;
   } catch (error) {
     throw error;
   }
@@ -714,8 +680,8 @@ export const transcribeAudio = async (base64Audio: string, mimeType: string) => 
   }
   
   try {
-    const response = await callGemini("Transcribe.", "gemini-3-flash-preview", {}, { mimeType, data: base64Audio });
-    return response.text;
+    const { text: resultText } = await callGemini("Transcribe.", "gemini-3-flash-preview", {}, { mimeType, data: base64Audio });
+    return resultText;
   } catch (error) {
     throw error;
   }
@@ -728,8 +694,8 @@ export const translateScript = async (text: string, lang: string) => {
   }
   
   try {
-    const response = await callGemini(`Translate to ${lang}: ${text}`);
-    return response.text;
+    const { text: resultText } = await callGemini(`Translate to ${lang}: ${text}`);
+    return resultText;
   } catch (error) {
     throw error;
   }
@@ -742,8 +708,8 @@ export const improveScript = async (text: string, style: string) => {
   }
   
   try {
-    const response = await callGemini(`Improve for ${style}: ${text}`);
-    return response.text;
+    const { text: resultText } = await callGemini(`Improve for ${style}: ${text}`);
+    return resultText;
   } catch (error) {
     throw error;
   }

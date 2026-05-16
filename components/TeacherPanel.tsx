@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Download, Wand2, GraduationCap, FileText, Globe, RefreshCw, Image as ImageIcon, Copy, Check, Youtube, Hash } from 'lucide-react';
-import { AVAILABLE_VOICES, VoiceOption, SpeakingStyle } from '../types';
+import { Play, Pause, Download, Wand2, GraduationCap, FileText, Globe, RefreshCw, Copy, Check } from 'lucide-react';
+import { AVAILABLE_VOICES } from '../types';
 import { decodeBase64, decodeAudioData, audioBufferToWav } from '../utils/audioUtils';
-import { generateTeacherLesson, generateTeacherMeta, generateSpeech } from '../services/geminiService';
+import { generateTeacherLesson, generateSpeech } from '../services/geminiService';
 
 export const TeacherPanel: React.FC = () => {
   const [topic, setTopic] = useState<string>('');
@@ -11,11 +11,8 @@ export const TeacherPanel: React.FC = () => {
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>(AVAILABLE_VOICES.find(v => v.id === 'urdu_male_narrator')?.id || AVAILABLE_VOICES[0].id);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState<boolean>(false);
-  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState<boolean>(false);
   
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
-  const [youtubeMeta, setYoutubeMeta] = useState<{title: string, description: string, tags: string} | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -48,21 +45,6 @@ export const TeacherPanel: React.FC = () => {
       alert("Failed to generate lesson.");
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const generateThumbnail = async () => {
-    if (!urduLesson.trim()) return;
-    setIsGeneratingThumbnail(true);
-    try {
-      const data = await generateTeacherMeta(urduLesson);
-      if (data.imageUrl) setThumbnailUrl(`data:image/png;base64,${data.imageUrl}`);
-      if (data.metadata) setYoutubeMeta(data.metadata);
-    } catch (error) {
-      console.error(error);
-      alert("Failed to generate thumbnail.");
-    } finally {
-      setIsGeneratingThumbnail(false);
     }
   };
 
@@ -195,14 +177,6 @@ export const TeacherPanel: React.FC = () => {
                     {isGeneratingAudio ? <RefreshCw className="animate-spin" size={12} /> : <Play size={12} />}
                     Generate Voiceover
                   </button>
-                  <button
-                    onClick={generateThumbnail}
-                    disabled={isGeneratingThumbnail}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[10px] font-bold rounded-lg transition-all flex items-center gap-2"
-                  >
-                    {isGeneratingThumbnail ? <RefreshCw className="animate-spin" size={12} /> : <ImageIcon size={12} />}
-                    YouTube Thumbnail
-                  </button>
                 </>
               )}
             </div>
@@ -212,72 +186,6 @@ export const TeacherPanel: React.FC = () => {
             {urduLesson || <div className="text-slate-700 italic text-center text-sm py-20">Urdu lesson will appear here after generation...</div>}
           </div>
         </div>
-
-        {/* Thumbnail & Meta Section */}
-        {(thumbnailUrl || youtubeMeta) && (
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
-            <div className="space-y-4">
-              <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <ImageIcon size={12} /> Thumbnail Preview
-              </h4>
-              <div className="aspect-video bg-black rounded-xl border border-slate-800 overflow-hidden relative group">
-                {thumbnailUrl ? (
-                  <img src={thumbnailUrl} alt="Thumbnail" className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" />
-                ) : isGeneratingThumbnail ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-700">
-                    <RefreshCw size={24} className="animate-spin mb-2" />
-                    <span className="text-[10px]">Generating...</span>
-                  </div>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-800 bg-slate-950">
-                    <ImageIcon size={24} className="mb-2 opacity-20" />
-                    <span className="text-[10px] opacity-20">No image generated</span>
-                  </div>
-                )}
-              </div>
-              {thumbnailUrl && (
-                <a 
-                  href={thumbnailUrl} 
-                  download="youtube_thumbnail.png"
-                  className="inline-block text-xs text-yellow-400 hover:text-yellow-300 font-bold"
-                >
-                  Download Thumbnail
-                </a>
-              )}
-            </div>
-
-            {youtubeMeta && (
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                  <Youtube size={12} /> SEO Metadata
-                </h4>
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[8px] font-bold text-slate-600 uppercase">Title</span>
-                      <button onClick={() => handleCopy(youtubeMeta.title, 'meta-title')} className="text-[8px] text-indigo-400 hover:text-indigo-300">Copy</button>
-                    </div>
-                    <div className="bg-slate-950 p-2 rounded-lg border border-slate-800 text-[10px] text-slate-300 line-clamp-1">{youtubeMeta.title}</div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[8px] font-bold text-slate-600 uppercase">Description</span>
-                      <button onClick={() => handleCopy(youtubeMeta.description, 'meta-desc')} className="text-[8px] text-indigo-400 hover:text-indigo-300">Copy</button>
-                    </div>
-                    <div className="bg-slate-950 p-2 rounded-lg border border-slate-800 text-[10px] text-slate-300 line-clamp-2 leading-relaxed">{youtubeMeta.description}</div>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {youtubeMeta.tags.split(',').slice(0, 5).map((tag, i) => (
-                      <span key={i} className="text-[7px] bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded flex items-center gap-1">
-                        <Hash size={6} /> {tag.trim()}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Audio Player Controls */}
         {audioBuffer && (
